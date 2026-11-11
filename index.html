@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RE:GEBÄUDE - Planspiel</title>
+    <!-- Tailwind CSS für das visuelle Design (Thema: Energieeffizienz/Nachhaltigkeit) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK (Version 8 für einfache Integration ohne Build-Tools) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ecoGreen: '#2E7D32',
+                        ecoLight: '#81C784',
+                        ecoAlert: '#D32F2F'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0fdf4; }
+        .card:hover { transform: translateY(-5px); transition: all 0.3s ease; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .disabled-card { opacity: 0.5; filter: grayscale(100%); pointer-events: none; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-ecoGreen text-white p-6 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-3xl font-bold">RE:GEBÄUDE</h1>
+            <p class="text-lg opacity-80">Energieeffizienz in Verwaltungsgebäuden - Multiplayer</p>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Linke Spalte: Dashboard & Info -->
+        <div class="lg:col-span-1 space-y-6">
+            
+            <!-- Dashboard -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-ecoGreen">
+                <h2 class="text-2xl font-bold mb-4 border-b pb-2">Live Dashboard</h2>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-gray-500 uppercase font-bold">Budget (Spielchips)</p>
+                    <p id="budgetDisplay" class="text-4xl font-black text-blue-600">100 🪙</p>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-sm text-gray-500 uppercase font-bold">CO2-Ausstoß (Chips)</p>
+                    <p id="co2Display" class="text-4xl font-black text-ecoAlert">100 ☁️</p>
+                </div>
+
+                <button onclick="resetGame()" class="mt-4 w-full bg-red-100 text-red-700 font-bold py-2 rounded hover:bg-red-200 transition">
+                    Spiel zurücksetzen (Trainer)
+                </button>
+            </div>
+
+            <!-- Referenzwerte (Tabelle 7.1 & 7.3) -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold mb-2">Referenzwerte (Tab 7.1 & 7.3)</h3>
+                <div class="text-sm space-y-2">
+                    <div class="flex justify-between border-b pb-1"><span>Strompreis:</span> <span class="font-mono">0,25 € / kWh</span></div>
+                    <div class="flex justify-between border-b pb-1"><span>Gaspreis:</span> <span class="font-mono">0,06 € / kWh</span></div>
+                    <div class="flex justify-between border-b pb-1"><span>Dieselpreis:</span> <span class="font-mono">1,30 € / l</span></div>
+                    <div class="flex justify-between border-b pb-1 text-gray-500 mt-2"><span>Strom CO2:</span> <span class="font-mono">474 g / kWh</span></div>
+                    <div class="flex justify-between border-b pb-1 text-gray-500"><span>Gas CO2:</span> <span class="font-mono">202 g / kWh</span></div>
+                    <div class="flex justify-between text-gray-500"><span>Diesel CO2:</span> <span class="font-mono">266 g / kWh</span></div>
+                </div>
+            </div>
+
+            <!-- Spieler-Lobby -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold mb-2">Spieler (Seminar-Gruppe)</h3>
+                <ul id="playerList" class="space-y-2">
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Management</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Controlling</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Facility Management</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Einkauf</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Personal</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Umweltbeauftragte/r</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Rechte Spalte: Moderationswand & Maßnahmen -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow-lg p-6 min-h-full">
+                <h2 class="text-2xl font-bold mb-2">Moderationswand</h2>
+                <p class="text-gray-600 mb-6">Wählt als Team gemeinsam Maßnahmen aus. Klickt auf eine Karte, um sie umzusetzen. Dies verbraucht Budget-Chips, senkt aber den CO2-Ausstoß!</p>
+                
+                <div id="measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Maßnahmenkarten werden hier durch JS generiert -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- HIER KOMMT DIE FIREBASE KONFIGURATION REIN (TEIL 2 DER ANLEITUNG) -->
+    <script>
+        const firebaseConfig = {
+            // BEISPIEL-PLATZHALTER: LÖSCHE DIESE ZEILEN UND FÜGE DEINE EIGENEN EIN!
+            apiKey: "HIER_KOMMT_DEIN_API_KEY_HIN",
+            authDomain: "dein-projekt.firebaseapp.com",
+            databaseURL: "https://dein-projekt-default-rtdb.europe-west1.firebasedatabase.app", // Wichtig: databaseURL muss oft manuell hinzugefügt werden!
+            projectId: "dein-projekt",
+            storageBucket: "dein-projekt.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
+
+        // Überprüfen, ob Firebase-Config eingefügt wurde
+        let db;
+        let isMultiplayerActive = false;
+        if(firebaseConfig.apiKey !== "HIER_KOMMT_DEIN_API_KEY_HIN") {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+            isMultiplayerActive = true;
+        } else {
+            console.warn("Multiplayer (Firebase) ist noch nicht konfiguriert. Spiel läuft im lokalen Einzelspieler-Modus.");
+        }
+
+        // --- SPIELLOGIK & DATEN ---
+        const INITIAL_STATE = {
+            budget: 100,
+            co2: 100,
+            measures: [
+                { id: "m1", title: "Gebäudedämmung", desc: "Reduziert Wärmeverlust immens. Hohe Investition.", cost: 25, co2Reduction: 30, active: false },
+                { id: "m2", title: "LED-Beleuchtung", desc: "Austausch der Leuchtmittel (Tab 7.2).", cost: 10, co2Reduction: 15, active: false },
+                { id: "m3", title: "Heizungspumpen-Tausch", desc: "Hocheffizienzpumpen sparen massiv Strom.", cost: 8, co2Reduction: 10, active: false },
+                { id: "m4", title: "Mitarbeiter-Sensibilisierung", desc: "Licht aus, Stoßlüften. Kostet kaum, bringt viel.", cost: 2, co2Reduction: 8, active: false },
+                { id: "m5", title: "Photovoltaik-Anlage", desc: "Eigener grüner Strom vom Dach.", cost: 30, co2Reduction: 25, active: false },
+                { id: "m6", title: "Smart-Home Thermostate", desc: "Automatische Heizungsregelung im Büro.", cost: 12, co2Reduction: 12, active: false }
+            ]
+        };
+
+        let gameState = JSON.parse(JSON.stringify(INITIAL_STATE));
+
+        // --- FUNKTIONEN ---
+
+        function renderDashboard() {
+            document.getElementById('budgetDisplay').innerText = `${gameState.budget} 🪙`;
+            document.getElementById('co2Display').innerText = `${gameState.co2} ☁️`;
+        }
+
+        function renderMeasures() {
+            const grid = document.getElementById('measuresGrid');
+            grid.innerHTML = ''; // Leeren
+
+            gameState.measures.forEach(measure => {
+                const isAffordable = gameState.budget >= measure.cost;
+                const cardStateClass = measure.active ? 'bg-ecoLight text-white border-2 border-ecoGreen disabled-card' : 
+                                      (!isAffordable ? 'bg-gray-100 disabled-card' : 'bg-white border cursor-pointer card');
+
+                const statusText = measure.active ? '✔ Umgesetzt' : (!isAffordable ? 'Zu teuer' : 'Klicken zum Kaufen');
+
+                const cardHTML = `
+                    <div class="rounded-lg p-5 flex flex-col justify-between h-full ${cardStateClass}" 
+                         onclick="buyMeasure('${measure.id}')">
+                        <div>
+                            <h3 class="font-bold text-lg mb-1">${measure.title}</h3>
+                            <p class="text-sm opacity-80 mb-4">${measure.desc}</p>
+                        </div>
+                        <div class="flex justify-between items-center bg-black bg-opacity-5 p-2 rounded">
+                            <span class="font-bold text-blue-600 bg-white px-2 py-1 rounded shadow-sm">-${measure.cost} 🪙</span>
+                            <span class="font-bold text-ecoGreen bg-white px-2 py-1 rounded shadow-sm">-${measure.co2Reduction} ☁️</span>
+                        </div>
+                        <div class="mt-3 text-center text-xs font-bold uppercase tracking-wider">${statusText}</div>
+                    </div>
+                `;
+                grid.innerHTML += cardHTML;
+            });
+        }
+
+        function buyMeasure(id) {
+            const measure = gameState.measures.find(m => m.id === id);
+            
+            // Logik-Prüfung
+            if (measure && !measure.active && gameState.budget >= measure.cost) {
+                gameState.budget -= measure.cost;
+                gameState.co2 -= measure.co2Reduction;
+                measure.active = true;
+                
+                // Entweder lokal aktualisieren oder an Firebase senden
+                if(isMultiplayerActive) {
+                    db.ref('re-gebaeude/state').set(gameState);
+                } else {
+                    updateUI();
+                }
+            } else if (gameState.budget < measure.cost) {
+                alert("Nicht genügend Budget-Chips für diese Maßnahme!");
+            }
+        }
+
+        function resetGame() {
+            if(confirm("Möchtest du das Spiel für alle wirklich zurücksetzen?")) {
+                gameState = JSON.parse(JSON.stringify(INITIAL_STATE));
+                if(isMultiplayerActive) {
+                    db.ref('re-gebaeude/state').set(gameState);
+                } else {
+                    updateUI();
+                }
+            }
+        }
+
+        function updateUI() {
+            renderDashboard();
+            renderMeasures();
+        }
+
+        // --- INITIALISIERUNG & FIREBASE LISTENERS ---
+        if (isMultiplayerActive) {
+            // Auf Änderungen in der Datenbank hören
+            db.ref('re-gebaeude/state').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    gameState = data;
+                } else {
+                    // Falls die Datenbank leer ist, mit Initialwerten füllen
+                    db.ref('re-gebaeude/state').set(INITIAL_STATE);
+                }
+                updateUI();
+            });
+        } else {
+            // Lokaler Modus
+            updateUI();
+        }
+
+    </script>
+</body>
+</html>
