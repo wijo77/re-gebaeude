@@ -1,1000 +1,1512 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RE:GEBÄUDE - Planspiel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: { ecoGreen: '#2E7D32', ecoLight: '#81C784', ecoYellow: '#FBC02D' }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0fdf4; }
-        .card { transition: all 0.2s ease; }
-        .card:hover:not(.disabled-card) { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .disabled-card { opacity: 0.5; filter: grayscale(100%); pointer-events: none; }
-        .active-card { border: 4px solid #2E7D32; background-color: #e8f5e9; }
-        .modal-bg { background-color: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
-        .timer-bar { transition: width 1s linear; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RE:GEBÄUDE · Multiplayer-Planspiel</title>
+<!--
+  =====================================================================
+  RE:GEBÄUDE – Multiplayer-Browserversion (eine einzige Datei)
+  ---------------------------------------------------------------------
+  SETUP IN 5 SCHRITTEN
+  1. https://console.firebase.google.com -> Projekt anlegen
+  2. "Realtime Database" erstellen (Standort z. B. europe-west1)
+  3. Unter "Regeln" für einen nicht-sensiblen Seminar-Prototyp vorübergehend:
+       { "rules": { "re-gebaeude": { ".read": true, ".write": true } } }
+     SICHERHEIT: Diese offenen Regeln erlauben jeder Person mit Datenbank-URL,
+     alle Spielstände zu lesen und zu ändern. Das Admin-Passwort steht im
+     HTML-Quelltext und ist kein echter Zugriffsschutz. Nur für einen
+     nicht-sensiblen Seminar-Prototyp verwenden; für öffentlichen Betrieb
+     Firebase Authentication und restriktive Datenbankregeln einrichten.
+  4. Projekteinstellungen -> "Web-App hinzufügen" -> firebaseConfig kopieren
+     und unten im Abschnitt "1. KONFIGURATION" einfügen.
+  5. Datei als index.html in ein GitHub-Repo legen -> in Vercel importieren.
 
-        /* Perfektes Zick-Zack Brettspiel-Layout */
-        .board-container {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            grid-template-rows: repeat(4, 1fr);
-            gap: 6px;
-            padding: 12px;
-            background-color: #f8fafc;
-            border-radius: 12px;
-            border: 2px solid #e2e8f0;
+  Solange die Platzhalter-Config drin ist, läuft das Spiel im DEMO-MODUS
+  (lokal im Browser, mehrere Tabs desselben Browsers werden synchronisiert).
+  =====================================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          eco: { 50:'#effaf3',100:'#d7f2e0',200:'#b1e4c4',300:'#7fd09f',400:'#4cc47e',500:'#22a35a',600:'#178a49',700:'#126e3b',800:'#0f5730',900:'#0b3d22' }
         }
-        .board-field {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            padding: 4px;
-            border-radius: 8px;
-            font-size: 10px;
-            position: relative;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-            border: 2px solid transparent;
-            transition: all 0.3s;
-        }
-        .pawn-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 2px;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            width: 100%;
-        }
-        .pawn-badge {
-            font-size: 11px;
-            font-weight: 900;
-            width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            color: white;
-            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
-            border: 2px solid white;
-            z-index: 10;
-        }
-    </style>
+      }
+    }
+  };
+</script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .token { position:absolute; top:0; left:0; width:22px; height:22px; border-radius:9999px; display:flex; align-items:center; justify-content:center;
+           font-size:11px; font-weight:800; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.35);
+           transition:transform .7s cubic-bezier(.34,1.3,.64,1); z-index:10; pointer-events:none; }
+  .token.me { width:28px; height:28px; font-size:13px; box-shadow:0 0 0 3px #0b3d22, 0 3px 10px rgba(0,0,0,.45); z-index:11; }
+  .pulse-ring { animation:pulse 1.6s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(220,38,38,.55)} 70%{box-shadow:0 0 0 14px rgba(220,38,38,0)} 100%{box-shadow:0 0 0 0 rgba(220,38,38,0)} }
+  .fade-in { animation:fade .18s ease-out; }
+  @keyframes fade { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition:none !important; animation:none !important; } }
+</style>
 </head>
-<body class="text-gray-800 h-screen flex flex-col">
+<body class="bg-slate-100 text-slate-800 min-h-screen antialiased">
+<div id="app"></div>
 
-    <!-- Header -->
-    <header class="bg-ecoGreen text-white p-4 shadow-md sticky top-0 z-40 flex-shrink-0">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold tracking-wider">RE:GEBÄUDE</h1>
-                <p class="text-sm opacity-90" id="headerRole">Energieeffizienz in Verwaltungsgebäuden</p>
-            </div>
-            <div id="headerRoundInfo" class="hidden text-right flex items-center gap-3">
-                <span class="bg-white text-ecoGreen font-bold px-4 py-1.5 rounded-full text-sm shadow-inner" id="roundDisplay">Runde 1</span>
-            </div>
+<script>
+"use strict";
+/* =====================================================================
+   1. KONFIGURATION  (nur hier musst du etwas ändern)
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBU_L3Nyv-0-40mTmdQqmRA_R1VINvakAE",
+  authDomain: "re-gebaeude.firebaseapp.com",
+  databaseURL: "https://re-gebaeude-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "re-gebaeude",
+  storageBucket: "re-gebaeude.firebasestorage.app",
+  messagingSenderId: "6180416357",
+  appId: "1:6180416357:web:630c847ef6fa8e940b4f8c"
+};
+const ADMIN_PASSWORD   = "trainer2025";   // Passwort für die Spielleitung
+const DB_ROOT          = "re-gebaeude";    // Pfad in der Realtime Database
+const QUESTION_SECONDS = 60;              // Zeit pro Frage
+
+/* =====================================================================
+   2. SPIELDATEN  (Quelle: Spielplan, Spielkarten, Spielbeschreibung)
+   ===================================================================== */
+const FIELDS = 60;                                        // Original-Spielplan: Start = 1, Ziel = 60
+const EVENT_FIELDS = [6, 13, 27, 37, 45, 55];             // rote Felder  -> Ereigniskarte
+const TEAM_FIELDS  = [3, 11, 17, 21, 24, 30, 33, 41, 49, 52]; // lila Felder -> Teamkarte
+
+const START = { strom: 219000, gas: 415000, diesel: 368000 };  // kWh/a Ausgangssituation
+const EF    = { strom: 0.60,   gas: 0.24,   diesel: 0.27 };    // kg CO2e/kWh
+const CARRIER = { strom: 'Strom', gas: 'Erdgas', diesel: 'Diesel' };
+const START_BUDGET = 100000;
+const R3_BUDGET = 6000;
+const START_KWH = START.strom + START.gas + START.diesel;
+const START_CO2 = Math.round(START.strom * EF.strom + START.gas * EF.gas + START.diesel * EF.diesel);
+
+const TEAMS = ['t1', 't2', 't3', 't4'];
+const TEAM_META = {
+  t1: { n: 1, color: '#16a34a', fg: '#ffffff' },
+  t2: { n: 2, color: '#2563eb', fg: '#ffffff' },
+  t3: { n: 3, color: '#eab308', fg: '#1f2937' },
+  t4: { n: 4, color: '#dc2626', fg: '#ffffff' }
+};
+
+const CAT_STYLE = {
+  A: { head: 'bg-emerald-600', soft: 'bg-emerald-50', label: 'Mitarbeitersensibilisierung · Vorbeugend' },
+  B: { head: 'bg-violet-600',  soft: 'bg-violet-50',  label: 'Fuhrpark' },
+  C: { head: 'bg-amber-500',   soft: 'bg-amber-50',   label: 'Beleuchtung' },
+  D: { head: 'bg-sky-600',     soft: 'bg-sky-50',     label: 'IT & Kommunikation' },
+  E: { head: 'bg-orange-600',  soft: 'bg-orange-50',  label: 'Heizung' },
+  F: { head: 'bg-teal-700',    soft: 'bg-teal-50',    label: 'Gebäudedämmung' }
+};
+
+/* Maßnahmenkarten: Vorderseite (title, cost) und Rückseite (desc, lines, sav, co2, bonus)
+   sav = eingesparte kWh je Energieträger (negativ = Mehrverbrauch) */
+const MEASURES = [
+  { id:'A1', cat:'A', title:'Durchführung einer Mitarbeiter-Schulung zum Thema Energie', cost:6000,
+    desc:'Nach unterschiedlichen Studien lassen sich durch das Verhalten der Mitarbeiter/innen bis zu 4 % der Energiekosten im Unternehmen einsparen. Mit dieser Maßnahme haben Sie die Energiekosten über alle Energieträger um rund 1 % gesenkt.',
+    lines:['Heizung: 4.000 kWh/a','Fuhrpark: 4.000 kWh/a','Beleuchtung: 1.000 kWh/a','Büro und IKT: 1.000 kWh/a'],
+    sav:{ strom:2000, gas:4000, diesel:4000 }, co2:3300, bonus:1200, zones:['heizung','fuhrpark','licht','ikt'] },
+  { id:'A2', cat:'A', title:'Schulung des Einkaufs/Controllings (nachhaltiger und energieeffizienter Einkauf)', cost:3000,
+    desc:'Bei der Schulung „Nachhaltiger Einkauf“ geht es darum, bei den relevanten Mitarbeiter/innen ein Bewusstsein für Ressourceneffizienz und Lebenszykluskostenrechnung zu schaffen. Umweltfreundliche und energieeffiziente Produkte erweisen sich in vielen Fällen – selbst bei höheren Anschaffungskosten – als die wirtschaftlichere Variante.',
+    lines:[], sav:{}, co2:0, bonus:20000, bonusLabel:'Zusätzliches Budget', zones:[] },
+  { id:'A3', cat:'A', title:'Erstellung eines Heizungskonzeptes', cost:2500,
+    desc:'Die Erstellung des Heizungskonzeptes hilft Ihnen im späteren Spielverlauf bei dem Thema Heizung.',
+    lines:[], sav:{}, co2:0, bonus:0, zones:['heizung'] },
+  { id:'A4', cat:'A', title:'Erstellung eines Lüftungsplanes', cost:0,
+    desc:'Durch einen Lüftungsplan wird – ähnlich wie bei den CO2-Ampeln – immer dann gelüftet, wenn es erforderlich ist. Im Vergleich zu einer „Lüftung per Dauerkippstellung“ lassen sich so bis zu 20 % des Heizenergieverbrauchs sparen.',
+    lines:['Heizung: 21.000 kWh/a'], sav:{ gas:21000 }, co2:5700, bonus:500, zones:['heizung'] },
+  { id:'A5', cat:'A', title:'Erstellung eines Beleuchtungskonzeptes', cost:3000,
+    desc:'Die Erstellung des Beleuchtungskonzeptes hilft Ihnen im späteren Spielverlauf bei dem Thema Beleuchtung.',
+    lines:[], sav:{}, co2:0, bonus:0, zones:['licht'] },
+  { id:'A6', cat:'A', title:'Anschaffung einer PV-Anlage mit Batteriespeicher für die Grundlast', cost:15000,
+    desc:'Bei einer PV-Anlage sollte das Einsparpotenzial (ausgelegt auf die Grundlast) im Mittelpunkt stehen. Die Grundlast liegt im Schnitt bei ca. 5 % des Stromverbrauches. PV-Anlage mit 5 kWp (ca. 40 m²) und ca. 12 kW Pufferspeicher, der Strom wird zu 100 % eigengenutzt.',
+    lines:['Strom: 12.000 kWh/a'], sav:{ strom:12000 }, co2:7200, bonus:1400, zones:['sonstige'] },
+
+  { id:'B1', cat:'B', title:'Reifenkontrollsystem (TPMS) nachrüsten', cost:1800,
+    desc:'Rund ein Drittel der Fahrzeuge ist mit zu geringem Reifendruck unterwegs. Schon 0,2 bar zu wenig können laut TÜV Süd bis zu 5 % Mehrverbrauch bedeuten. Mit dieser Maßnahme sparen Sie rund 5 % Ihres Sprits ein.',
+    lines:['Fuhrpark: 6.000 kWh/a'], sav:{ diesel:6000 }, co2:1600, bonus:300, zones:['fuhrpark'] },
+  { id:'B2', cat:'B', title:'Durchführen eines Fahrertrainings (Spritspartraining) für die Vertriebsmitarbeiter/innen', cost:5000,
+    desc:'Fahrtrainings fördern zudem Teamspirit und Motivation. Nach Aussage des ADAC lassen sich durch bewusstes Fahren bis zu 20 % Kraftstoff einsparen. Mit dieser Maßnahme sparen Sie rund 15 % Ihres Sprits ein.',
+    lines:['Fuhrpark: 55.000 kWh/a'], sav:{ diesel:55000 }, co2:14900, bonus:3000, zones:['fuhrpark'] },
+  { id:'B3', cat:'B', title:'Anschaffung einer Reiseroutensoftware und Schulung der Mitarbeiter/innen', cost:16800,
+    desc:'Mit einer intelligenten Routenplansoftware können bis zu 25 % der Kilometer eingespart werden, zusätzlich auch Zeit und Nerven. Mit dieser Maßnahme sparen Sie rund 20 % des Spritverbrauchs ein.',
+    lines:['Fuhrpark (Diesel): 73.000 kWh/a'], sav:{ diesel:73000 }, co2:19700, bonus:4000, zones:['fuhrpark'] },
+  { id:'B4', cat:'B', title:'Umstellung von 5 Dieselfahrzeugen auf Elektrofahrzeuge für den Nahbereich', cost:100000,
+    desc:'Sie tauschen 5 Dieselfahrzeuge im Vertrieb Nahbereich gegen Elektroautos. Bei 20.000 km/Jahr werden ca. 43.000 kWh Endenergie eingespart: rund 60.000 kWh Diesel weniger, dafür 17.000 kWh Strom mehr.',
+    lines:['Einsparung Fuhrpark (Diesel): 60.000 kWh/a','Mehrverbrauch Fuhrpark (Strom): 17.000 kWh/a'],
+    sav:{ diesel:60000, strom:-17000 }, co2:6000, co2Note:' (kumuliert)', bonus:2400, zones:['fuhrpark'] },
+
+  { id:'C1', cat:'C', title:'Mitarbeiter/innen sensibilisieren, Regeln für Beleuchtung einführen', cost:0,
+    desc:'Durch Sensibilisierung und klare Regeln lässt sich der Verbrauch für die Beleuchtung erheblich minimieren (Studien: bis zu 10 %). Bei Ihnen sinken die Strommengen der Beleuchtung um ca. 3 %.',
+    lines:['Beleuchtung: 2.000 kWh/a'], sav:{ strom:2000 }, co2:1200, bonus:200, zones:['licht'] },
+  { id:'C2', cat:'C', title:'Umstellung der Beleuchtung auf LED-Retrofit (Umstellung 1:1)', cost:7000,
+    desc:'Mit LED-Retrofits lässt sich im Vergleich zu T8-Leuchtstoffröhren und T8-Rasterkästen mit KVG ungefähr 50 % der Beleuchtungsenergie sparen.',
+    lines:['Beleuchtung: 30.000 kWh/a'], sav:{ strom:30000 }, co2:18000, bonus:3500, zones:['licht'] },
+  { id:'C3', cat:'C', title:'Umstellung der Beleuchtung auf LED-Panels', cost:9000,
+    desc:'Mit LED-Panels lässt sich im Vergleich zu T8-Leuchtstoffröhren mit KVG ungefähr 60 % der Beleuchtungsenergie sparen. Ohne Beleuchtungskonzept zahlen Sie zusätzlich 5.000 €, da Sie zu viel Beleuchtung installieren, und die Einsparung fällt um fast 20 % geringer aus.',
+    lines:['Mit Beleuchtungskonzept: 37.000 kWh/a · 22.200 kg CO₂/a · Budget 4.300 €','Ohne Beleuchtungskonzept: +5.000 € · 30.000 kWh/a · 18.000 kg CO₂/a · Budget 3.500 €'],
+    noAuto:true, sav:{ strom:37000 }, co2:22200, bonus:4300, zones:['licht'] },
+
+  { id:'D1', cat:'D', title:'„Tintenstrahldrucker statt Laserdrucker“', cost:5800,
+    desc:'Im Druckmodus benötigen Tintenstrahler im Schnitt 10 bis 20 Watt, Laserdrucker 300 bis 400 Watt. Bei der Umstellung von 16 Druckern können rund 3.200 kWh im Jahr gespart werden.',
+    lines:['Strom: 3.000 kWh/a'], sav:{ strom:3000 }, co2:1800, bonus:300, zones:['ikt'] },
+  { id:'D2', cat:'D', title:'„Standby abschaffen“', cost:500,
+    desc:'Steckerleisten verwenden! Viele Geräte verbrauchen auch ausgeschaltet Strom, solange sie nicht vom Netz getrennt sind (Monitore, Drucker, Kopierer, Scanner …). Mit konsequenter Abschaltung aller PCs und Monitore können bis zu 2.500 kWh im Jahr gespart werden.',
+    lines:['Strom: 2.000 kWh/a'], sav:{ strom:2000 }, co2:1200, bonus:200, zones:['ikt'] },
+  { id:'D3', cat:'D', title:'Einstellungen Rechner/Monitore', cost:0,
+    desc:'Bildschirmschoner verbrauchen mehr Energie als z. B. die Arbeit mit Word. Der Bildschirm sollte bei Nicht-Benutzung schwarz werden (Energieoptionen). Damit werden bei Ihnen ca. 1.000 kWh im Jahr gespart.',
+    lines:['Strom: 1.000 kWh/a'], sav:{ strom:1000 }, co2:600, bonus:100, zones:['ikt'] },
+  { id:'D4', cat:'D', title:'„Server virtualisieren“', cost:3000,
+    desc:'Mehrere einzelne Server werden auf einen leistungsstarken Server übertragen und anschließend abgeschaltet. Dadurch lässt sich der Serverenergieverbrauch im Durchschnitt um die Hälfte verringern.',
+    lines:['Strom: 4.000 kWh/a'], sav:{ strom:4000 }, co2:2400, bonus:500, zones:['ikt'] },
+
+  { id:'E1', cat:'E', title:'Heizkörper frei räumen, Heizkörper entlüften und Wasserdruck richtig einstellen', cost:0,
+    desc:'Bei zugestellten Heizkörpern geht viel Wärme (bis zu 5 %) verloren, durch nicht entlüftete Heizungen und zu niedrigen Wasserdruck bis zu 15 %. Die Energieverbräuche der Heizung sinken um ca. 5 %.',
+    lines:['Heizung (Gas): 21.000 kWh/a'], sav:{ gas:21000 }, co2:5000, bonus:500, zones:['heizung'] },
+  { id:'E2', cat:'E', title:'Austausch der Heizungspumpen', cost:1500,
+    desc:'Durch den Ersatz einer alten ungeregelten Pumpe durch eine hocheffiziente FU-geregelte Pumpe lassen sich bis zu 60 % Energie einsparen. Die Strommenge der Heizung sinkt um ca. 50 %.',
+    lines:['Heizung (Strom): 2.000 kWh/a'], sav:{ strom:2000 }, co2:1200, bonus:200, zones:['ww'] },
+  { id:'E3', cat:'E', title:'Temperatursteuerung nachrüsten und Durchführung eines hydraulischen Abgleichs', cost:7500,
+    desc:'Automatische Temperatursteuerung (bis zu 12 %) und hydraulischer Abgleich (bis zu 15 %) erschließen relativ einfach große Einsparpotenziale. Die Energiemenge der Heizung sinkt um ca. 10 %.',
+    lines:['Heizung (Gas): 42.000 kWh/a'], sav:{ gas:42000 }, co2:10100, bonus:1100, zones:['heizung'] },
+  { id:'E4', cat:'E', title:'Austausch des alten Standardkessels gegen einen Brennwertkessel', cost:18000,
+    desc:'Gegenüber einem alten Standardkessel sind mit einem Brennwertkessel Einsparungen von bis zu 20 % möglich. Die Energiemenge für die Heizung sinkt um ca. 15 %.',
+    lines:['Heizung (Gas): 62.000 kWh/a','Ohne Heizungskonzept kostet die Maßnahme 5.000 € mehr!'], sav:{ gas:62000 }, co2:14900, bonus:1600, zones:['heizung'] },
+  { id:'E5', cat:'E', title:'Heizungswartungs- und -optimierungsvertrag abschließen (für 5 Jahre)', cost:2000,
+    desc:'Die Heizung wird regelmäßig gewartet und den technischen Möglichkeiten entsprechend optimiert. Die Energiemenge für die Heizung sinkt um ca. 2 %.',
+    lines:['Heizung (Gas): 8.000 kWh/a'], sav:{ gas:8000 }, co2:1900, bonus:200, zones:['heizung'] },
+  { id:'E6', cat:'E', title:'Anschaffung von Zeitschaltuhren für die Warmwasserboiler', cost:100,
+    desc:'Die Boiler der Handwaschbecken halten rund um die Uhr warmes Wasser bereit. Mit Zeitschaltuhren nur dann, wenn es gebraucht wird: Die Strommenge der Warmwasserbereitung sinkt um ca. 65 %.',
+    lines:['Strom: 5.000 kWh/a'], sav:{ strom:5000 }, co2:3000, bonus:600, zones:['ww'] },
+
+  { id:'F1', cat:'F', title:'Alle Dichtungen (Türen/Fenster) überprüfen und defekte Dichtungen austauschen', cost:2500,
+    desc:'Ca. 20 % aller Fenster in Deutschland sind undicht. Sie sparen ca. 2 % der Heizenergie, und die Mitarbeiter/innen sind zufriedener, da der Luftzug weg ist.',
+    lines:['Heizung (Gas): 8.000 kWh/a'], sav:{ gas:8000 }, co2:1900, bonus:200, zones:['huelle'] },
+  { id:'F2', cat:'F', title:'Austausch der Fenster', cost:150000,
+    desc:'Wärmeschutz-Isolierverglasung (Uw = 1,1) statt Isolierglas (Uw = 3) spart bis zu ca. 150 kWh/a Heizenergie pro m². Bei ca. 500 m² Fensterfläche sparen Sie ca. 14 % der Heizenergie.',
+    lines:['Heizung (Gas): 60.000 kWh/a'], sav:{ gas:60000 }, co2:14400, bonus:1500, zones:['huelle'] },
+  { id:'F3', cat:'F', title:'Dachdämmung erneuern', cost:88000,
+    desc:'Flachdach von 1974 (EPS) hat einen U-Wert von ca. 1, heutige XPS-Dämmung (20–30 cm) ca. 0,14. Bei ca. 880 m² Dachfläche sparen Sie ca. 18 % der Heizenergie.',
+    lines:['Heizung (Gas): 75.000 kWh/a'], sav:{ gas:75000 }, co2:18000, bonus:1900, zones:['huelle'] }
+];
+const MBY = Object.fromEntries(MEASURES.map(m => [m.id, m]));
+
+const ROUNDS = {
+  1: { title:'Energiebilanz & vorbeugende Maßnahmen', own:['A1','A2','A3','A4','A5','A6'], pick:3, min:3, req:[] },
+  2: { title:'Fuhrpark & Beleuchtung', own:['B1','B2','B3','B4','C1','C2','C3'], pick:3, min:3, req:[['B','Fuhrpark'],['C','Beleuchtung']] },
+  3: { title:'Informations- & Kommunikationstechnologie', own:['D1','D2','D3','D4'], pick:3, min:3, req:[] },
+  4: { title:'Heizung & Wärmedämmung', own:['E1','E2','E3','E4','E5','E6','F1','F2','F3'], pick:3, min:3, req:[['E','Heizung'],['F','Wärmedämmung']] }
+};
+
+const ZONES = [
+  ['ikt','Büro & IKT'], ['licht','Beleuchtung'], ['klima','Klima & Kühlung'],
+  ['heizung','Heizung'], ['ww','Warmwasser & Heizungspumpen'], ['aufzug','Aufzug'],
+  ['sonstige','Sonstige Gebäudetechnik'], ['huelle','Gebäudehülle'], ['fuhrpark','Fuhrpark']
+];
+
+const EVENTS = [
+  { id:1, text:'Ihr Geschäftsführer hat entschieden, sich mit dem Unternehmen an einem Energieeffizienznetzwerk zu beteiligen. Dies bringt einen zusätzlichen Schub für die Mitarbeiter/innen.', effect:'Rücken Sie 2 Felder vor.', move:2 },
+  { id:2, text:'Zwei Auszubildende aus Ihrem Betrieb werden kostenfrei zu „Energiescouts“ weitergebildet. Das wirkt sich positiv auf das Thema Energie im Unternehmen aus.', effect:'Rücken Sie 1 Feld vor.', move:1 },
+  { id:3, text:'Sie haben einen Preis bei einem Energieeffizienz-Wettbewerb gewonnen.', effect:'Sie bekommen dafür 5.000 € für Ihr Budget.', budget:5000 },
+  { id:4, text:'Die Mitarbeiter/innen haben einen Monat lang den Fahrstuhl nicht benutzt.', effect:'Dadurch werden ca. 500 kWh Strom eingespart und Sie dürfen 1 Feld vorrücken.', move:1, strom:-500 },
+  { id:5, text:'Der Hausmeister prüft alle Türen/Fenster (Dichtungen und Spaltmaße) und repariert diese bei Bedarf. Damit wird das Wohlfühlklima gesteigert und es spart nebenbei Energie.', effect:'Rücken Sie 1 Feld vor.', move:1 },
+  { id:6, text:'Im Sommer steigt die Temperatur im Büro über 30 °C – nach Arbeitsstättenrichtlinie muss der Arbeitgeber wirksame Maßnahmen ergreifen! Es wird eine Klimaanlage installiert.', effect:'Kosten 5.000 €, Mehrverbrauch ca. 4.000 kWh Strom in den Sommermonaten (Juni/Juli/August).', budget:-5000, strom:4000 }
+];
+
+const TEAMCARDS = [
+  { id:1,  q:'Nennen Sie 3 Bereiche, bei denen die Mitarbeiter/innen durch das eigene Verhalten direkt Einfluss auf Energieeinsparungen im Unternehmen nehmen können.', rule:'Bei 3 richtigen Antworten ein Feld vor, falsch eins zurück.', sol:'PC, Licht, Heizen, Kühlung', type:'admin', yes:1, no:-1 },
+  { id:2,  q:'Wurden die Mitarbeiter/innen zum Thema Energie geschult?', rule:'Wenn ja zwei Felder vor, wenn nein zwei zurück.', type:'auto', check:['A1'], yes:2, no:-2 },
+  { id:3,  q:'Wurde ein Heizungskonzept erstellt?', rule:'Wenn ja ein Feld vor, wenn nein eins zurück.', type:'auto', check:['A3'], yes:1, no:-1 },
+  { id:4,  q:'Nennen Sie drei Geräte, die nach Arbeitsschluss im Stand-by sind und ausgeschaltet werden könnten.', rule:'Bei 3 richtigen Antworten ein Feld vor, falsch eins zurück.', sol:'PC, Drucker, Bildschirm, Kaffeemaschine, Router, Stereoanlage', type:'admin', yes:1, no:-1 },
+  { id:5,  q:'Wann verbraucht ein PC keinen Strom mehr?', rule:'Richtig ein Feld vor, falsch eins zurück.', sol:'Wenn er komplett vom Netz (stromlos) genommen ist', type:'admin', yes:1, no:-1 },
+  { id:6,  q:'Haben die Vertriebsmitarbeiter/innen ein Fahrertraining (Spritsparen) absolviert?', rule:'Wenn ja ein Feld vor, wenn nein eins zurück.', type:'auto', check:['B2'], yes:1, no:-1 },
+  { id:7,  q:'Wurde die Beleuchtung auf LED umgestellt?', rule:'Wenn ja ein Feld vor, wenn nein eins zurück.', type:'auto', check:['C2','C3'], yes:1, no:-1 },
+  { id:8,  q:'Wurden die Mitarbeiter/innen zum Thema Licht sensibilisiert?', rule:'Wenn ja ein Feld vor, wenn nein eins zurück.', type:'auto', check:['C1'], yes:1, no:-1 },
+  { id:9,  q:'Wie viel Energie kann mit einer hocheffizienten Umwälzpumpe gegenüber einer ungeregelten bei der Heizung eingespart werden?', rule:'Richtig ein Feld vor, falsch eins zurück.', sol:'Bis zu 80 %', type:'admin', yes:1, no:-1 },
+  { id:10, q:'Ab wann lohnt sich das Ausschalten einer Leuchtstoffröhre (wirtschaftlich)?', rule:'Richtig ein Feld vor, falsch eins zurück.', sol:'Ab 10 Minuten', type:'admin', yes:1, no:-1 }
+];
+
+const QUESTIONS = {
+  1: { title:'Allgemeine Energiethemen', items:[
+    { q:'Wie hoch war der Anteil erneuerbarer Energien am deutschen Bruttostromverbrauch im Jahr 2025?', a:['Etwa 40 %','Etwa 55,1 %','Etwa 80 %'], c:1 },
+    { q:'Wie hoch waren die durchschnittlichen direkten CO₂-Emissionen des in Deutschland verbrauchten Stroms im Jahr 2025 ungefähr (pro kWh)?', a:['Etwa 50 g','Etwa 344 g','Etwa 600 g'], c:1 },
+    { q:'Welche Klimaschutzziele sind im deutschen Bundes-Klimaschutzgesetz festgelegt?', a:['55 % bis 2030','65 % bis 2030, 88 % bis 2040, Treibhausgasneutralität bis 2045','80 % bis 2030'], c:1 },
+    { q:'Ein Verwaltungsgebäude verbraucht im Jahr 12.000 kWh Strom. Wie hoch sind die direkten CO₂-Emissionen bei 344 g CO₂/kWh?', a:['0,41 t','4,13 t','41,3 t'], c:1 },
+    { q:'Ein Unternehmen verbraucht je 1.000 kWh Erdgas und Strom. Wie verhalten sich die CO₂-Emissionen zueinander?', a:['Identisch','Nur über Emissionsfaktoren und Systemgrenzen bestimmbar','Strom verursacht immer mehr'], c:1 },
+    { q:'Welcher Kennwert eignet sich am besten zum Vergleich von Verwaltungsgebäuden?', a:['Absoluter Jahresverbrauch','Flächenbezogener Verbrauch in kWh/m²a','Jährliche Energiekosten'], c:1 }
+  ]},
+  2: { title:'Fuhrpark und Beleuchtung', items:[
+    { q:'Welcher Kraftstoff verursacht geringere direkte CO₂-Emissionen pro 100 km? (E10: 7,3 l vs. Diesel: 5,4 l)', a:['E10','Diesel','Beide gleich'], c:1 },
+    { q:'Warum lässt sich die Klimawirkung von E10 und Diesel nicht allein am CO₂ pro Liter vergleichen?', a:['Der Energiegehalt spielt keine Rolle','Vorketten und realer Verbrauch müssen berücksichtigt werden','Es gilt immer derselbe Verbrauch'], c:1 },
+    { q:'Welchen Einfluss hat die Geschwindigkeit auf den Energieverbrauch eines Pkw?', a:['Linear','Der Luftwiderstand steigt stark und kann dominierend werden','Kaum eine Rolle'], c:1 },
+    { q:'Zwei LED-Leuchten: A mit 40 W und 4.000 lm, B mit 50 W und 4.500 lm. Welche Aussage stimmt?', a:['Leuchte A hat die höhere Lichtausbeute','Leuchte B hat die höhere Lichtausbeute','Beide sind gleich'], c:0 },
+    { q:'Wie wird eine Beleuchtungssanierung fachlich sinnvoll bewertet?', a:['Über Leistung und Preis','Über Lichtstrom, Beleuchtungsstärke, Lichtverteilung, Blendung, Betriebsstunden und Energie','Über Anzahl und Farbe'], c:1 },
+    { q:'Was gilt bei der Umrüstung von Leuchtstoffröhren auf LED?', a:['Immer geeignet, wenn die Leistung sinkt','Kompatibilität, Lichtverteilung und Blendung prüfen','Die Beleuchtungsstärke ist vernachlässigbar'], c:1 }
+  ]},
+  3: { title:'Informations- und Kommunikationstechnologie', items:[
+    { q:'Welche ISO-Norm beschreibt ein Energiemanagementsystem?', a:['ISO 14001','ISO 50001','ISO 27001'], c:1 },
+    { q:'Was beschreibt der Kennwert PUE bei Rechenzentren?', a:['Verhältnis von Kapazität zu Servern','Verhältnis von Gesamtenergieverbrauch zu IT-Energieverbrauch','Verhältnis von Rechenleistung zu Anschlussleistung'], c:1 },
+    { q:'Ein Rechenzentrum verbraucht 1.200 MWh, davon 1.000 MWh für die IT. Wie hoch ist der PUE-Wert?', a:['0,83','1,20','2,20'], c:1 },
+    { q:'Welche Aussagekraft hat der COP bei Wärmepumpen bzw. Kühlsystemen?', a:['Verhältnis von Kälte-/Wärmeleistung zu elektrischer Leistung','Lebensdauer','Verhältnis von Anschaffung zu Kosten'], c:0 },
+    { q:'Laptop oder Desktop-PC – was ist nachhaltiger?', a:['Der Laptop ist immer besser','Neben dem Betrieb auch Herstellung, Reparierbarkeit und Nutzungsdauer betrachten','Der Desktop-PC ist immer besser'], c:1 },
+    { q:'Welche Maßnahme ist bei einer längeren Arbeitspause am PC sinnvoll?', a:['Bildschirmschoner','Bildschirm aus, Rechner in den Energiesparmodus oder ausschalten','Bildschirmauflösung erhöhen'], c:1 }
+  ]},
+  4: { title:'Heizung und Wärmedämmung', items:[
+    { q:'Was beschreibt der COP einer Wärmepumpe?', a:['Wärmeleistung zu elektrischer Leistung bei einem bestimmten Betriebszustand','Investition zu Lebensdauer','Veränderung der Heizleistung'], c:0 },
+    { q:'Was bedeutet ein COP von 4 bei einer Wärmepumpe?', a:['4 kWh Strom für 4 kWh Wärme','Sie gibt ca. 4 kWh Wärme je 1 kWh Strom ab','400 % Einsparung'], c:1 },
+    { q:'Welcher Kennwert bewertet die Effizienz einer Wärmepumpe über ein ganzes Jahr?', a:['COP am Prüfpunkt','Jahresarbeitszahl bzw. SCOP','Nennleistung'], c:1 },
+    { q:'Was sagt der U-Wert eines Bauteils aus?', a:['Hoch = gut','Niedrig = geringerer Wärmedurchgang','Er beschreibt die Luftdichtheit'], c:1 },
+    { q:'Warum sollte die Heizungsanlage nach einer Dämmung neu eingestellt werden?', a:['Der Wärmebedarf steigt','Der Wärmebedarf sinkt, Vorlauftemperatur/Heizkurve anpassen','Eine höhere Vorlauftemperatur ist nötig'], c:1 },
+    { q:'Wie wirken Dämmung, Luftdichtheit und Lüftung zusammen?', a:['Lüftung wird überflüssig','Reduziert Wärmeverluste, erfordert aber ein angepasstes Lüftungskonzept','Verhindert Feuchtigkeit grundsätzlich'], c:1 }
+  ]}
+};
+
+const SCENARIO = 'Die RKW Metallbau GmbH ist ein metallverarbeitender Betrieb (Werkzeugbau mit Montage und Handel) mit 140 Beschäftigten, davon 65 in Verwaltung und Vertrieb. Betrachtet wird nur das Verwaltungsgebäude: 1974 als zweigeschossiges Flachdachgebäude mit Keller gebaut, je Etage 496 m² Nettogrundfläche plus 384 m² Flachdachanbau (1988). Innen T8-Leuchtstoffröhren mit konventionellen Vorschaltgeräten, außen HQL-Strahler. Heizung: Erdgas-Standardkessel von 1988. In die IKT-Hardware wurde zuletzt kaum investiert. Fuhrpark: 20 Diesel-Firmenwagen (2 Geschäftsführer à ca. 30.000 km/a, 10 × regionaler Vertrieb à 20.000 km/a, 8 × bundesweiter Vertrieb à 50.000 km/a). CO₂-Bilanz: Scope 1 & 2, Gate to Gate.';
+
+/* =====================================================================
+   3. HILFSFUNKTIONEN
+   ===================================================================== */
+const NF = new Intl.NumberFormat('de-DE');
+const fmt = n => NF.format(Math.round(Number(n) || 0));
+const eur = n => fmt(n) + ' €';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const clone = v => (v == null ? null : JSON.parse(JSON.stringify(v)));
+const box = (html, extra = '') => `<div class="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5 ${extra}">${html}</div>`;
+const grid = items => `<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">${items.join('')}</div>`;
+const pickRandom = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* =====================================================================
+   4. DATENBANK-ADAPTER  (Firebase oder lokaler Demo-Modus)
+   Alle Team-Zustände werden als JSON-String gespeichert. Grund: Firebase
+   löscht leere Arrays/Objekte und null-Werte -> so bleibt alles stabil.
+   ===================================================================== */
+class FireDB {
+  constructor(cfg) {
+    firebase.initializeApp(cfg);
+    this.db = firebase.database();
+    this.mode = 'firebase';
+    this.offset = 0;
+    this.db.ref('.info/serverTimeOffset').on('value', s => { this.offset = s.val() || 0; });
+  }
+  ref(p) { return this.db.ref(p ? DB_ROOT + '/' + p : DB_ROOT); }
+  listen(p, cb) { this.ref(p).on('value', s => cb(s.val())); }
+  set(p, v) { return this.ref(p).set(v); }
+  update(p, o) { return this.ref(p).update(o); }
+  remove(p) { return this.ref(p).remove(); }
+  push(p, v) { return this.ref(p).push(v); }
+  get(p) { return this.ref(p).once('value').then(s => s.val()); }
+  // applyLocally = false -> keine Zwischenstände im UI (verhindert Flackern)
+  txn(p, fn) { return this.ref(p).transaction(fn, null, false).then(r => ({ committed: r.committed, value: r.snapshot ? r.snapshot.val() : null })); }
+  TS() { return firebase.database.ServerValue.TIMESTAMP; }
+  now() { return Date.now() + this.offset; }
+  onConnection(cb) { this.db.ref('.info/connected').on('value', s => cb(!!s.val())); }
+}
+
+class MemoryDB {
+  constructor() {
+    this.mode = 'demo'; this.tree = {}; this.ls = []; this.counter = 0;
+    try {
+      this.ch = new BroadcastChannel('regebaeude-demo');
+      this.ch.onmessage = e => this._onMsg(e.data);
+      this.ch.postMessage({ op: 'hello' });
+    } catch (e) { this.ch = null; }
+  }
+  _parts(p) { return String(p || '').split('/').filter(Boolean); }
+  _get(p) {
+    let n = this.tree;
+    for (const k of this._parts(p)) { if (n == null || typeof n !== 'object') return null; n = n[k]; }
+    return n === undefined ? null : n;
+  }
+  _set(p, v) {
+    const parts = this._parts(p);
+    v = v == null ? null : clone(v);
+    if (!parts.length) { this.tree = v || {}; return; }
+    let n = this.tree; const stack = [];
+    for (let i = 0; i < parts.length - 1; i++) {
+      const k = parts[i];
+      if (n[k] == null || typeof n[k] !== 'object') n[k] = {};
+      stack.push([n, k]); n = n[k];
+    }
+    const last = parts[parts.length - 1];
+    if (v === null) delete n[last]; else n[last] = v;
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const [par, k] = stack[i];
+      if (par[k] && typeof par[k] === 'object' && !Object.keys(par[k]).length) delete par[k];
+    }
+  }
+  _notify(p) {
+    const cp = this._parts(p).join('/');
+    this.ls.forEach(l => {
+      if (cp === '' || l.p === '' || cp === l.p || cp.startsWith(l.p + '/') || l.p.startsWith(cp + '/')) l.cb(clone(this._get(l.p)));
+    });
+  }
+  _write(p, v, remote) {
+    this._set(p, v);
+    if (!remote && this.ch) this.ch.postMessage({ op: 'set', p, v: v == null ? null : clone(v) });
+    this._notify(p);
+  }
+  _onMsg(d) {
+    if (!d) return;
+    if (d.op === 'set') { this._set(d.p, d.v); this._notify(d.p); }
+    else if (d.op === 'hello') { if (Object.keys(this.tree).length && this.ch) this.ch.postMessage({ op: 'full', tree: this.tree }); }
+    else if (d.op === 'full') { if (!Object.keys(this.tree).length) { this.tree = clone(d.tree) || {}; this._notify(''); } }
+  }
+  listen(p, cb) { const l = { p: this._parts(p).join('/'), cb }; this.ls.push(l); setTimeout(() => cb(clone(this._get(p))), 0); }
+  set(p, v) { this._write(p, v); return Promise.resolve(); }
+  update(p, o) { Object.keys(o).forEach(k => this._write(p + '/' + k, o[k])); return Promise.resolve(); }
+  remove(p) { this._write(p, null); return Promise.resolve(); }
+  push(p, v) { const k = 'k' + String(Date.now()).padStart(15, '0') + String(this.counter++).padStart(6, '0'); this._write(p + '/' + k, v); return Promise.resolve(k); }
+  get(p) { return Promise.resolve(clone(this._get(p))); }
+  txn(p, fn) {
+    const nv = fn(clone(this._get(p)));
+    if (nv === undefined) return Promise.resolve({ committed: false, value: null });
+    this._write(p, nv);
+    return Promise.resolve({ committed: true, value: clone(nv) });
+  }
+  TS() { return Date.now(); }
+  now() { return Date.now(); }
+}
+
+let DB = null;
+function createDB() {
+  const placeholder = !firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('DEIN') === 0;
+  if (!placeholder && typeof firebase !== 'undefined') {
+    try { return new FireDB(firebaseConfig); } catch (e) { console.error('Firebase-Fehler, wechsle in Demo-Modus', e); }
+  }
+  return new MemoryDB();
+}
+
+/* =====================================================================
+   5. ZUSTAND & SPIELLOGIK
+   ===================================================================== */
+const state = {
+  role: null, team: null, connected: false,
+  game: null, teams: { t1: null, t2: null, t3: null, t4: null },
+  sel: [], delSel: [], selKey: '',
+  bf: { strom: '', gas: '', diesel: '' }, bfErr: {},
+  dismissed: {}, qSeen: {}, lastExpired: null,
+  qSel: '1-0', qSelRound: -1,
+  pw: '', pwErr: false, loginMode: null, nameInput: '',
+  busy: false
+};
+
+function normGame(g) {
+  g = g || {};
+  return {
+    round: Number(g.round) || 0,
+    open: !!g.open,
+    rankings: g.rankings || {},
+    sent: g.sent || {},
+    q: g.q ? Object.assign({ results: {} }, g.q, { results: g.q.results || {} }) : null
+  };
+}
+state.game = normGame(null);
+const G = () => state.game;
+
+function defaultTeam(name) {
+  return { name: name || '', pos: 1, budget: 0, bilanz: false, cons: Object.assign({}, START), co2: START_CO2,
+           chosen: {}, impl: {}, rs: {}, deleted: [], delDone: false, cards: [], usedE: [], usedT: [], answer: null, log: [], undo: [] };
+}
+function parseTeam(str) {
+  if (!str) return null;
+  try { return Object.assign(defaultTeam(''), typeof str === 'string' ? JSON.parse(str) : str); } catch (e) { return null; }
+}
+const teamLabel = id => `Team ${TEAM_META[id].n}`;
+const teamName = id => (state.teams[id] && state.teams[id].name) ? `${teamLabel(id)} · ${state.teams[id].name}` : teamLabel(id);
+
+function allChosen(t) { return Object.keys(t.chosen).reduce((a, k) => a.concat(t.chosen[k] || []), []); }
+function has(t, id, extra) { return allChosen(t).includes(id) || (extra || []).includes(id); }
+
+/* Effektive Werte einer Maßnahme (Bedingungen der Kartenrückseite) */
+function effective(m, t, sel) {
+  let cost = m.cost, sav = Object.assign({}, m.sav), co2 = m.co2, bonus = m.bonus, note = '';
+  if (m.id === 'C3' && !has(t, 'A5', sel)) { cost += 5000; sav = { strom: 30000 }; co2 = 18000; bonus = 3500; note = 'Ohne Beleuchtungskonzept: +5.000 € und geringere Einsparung.'; }
+  if (m.id === 'E4' && !has(t, 'A3', sel)) { cost += 5000; note = 'Ohne Heizungskonzept: Mehrkosten 5.000 €.'; }
+  const kwh = (sav.strom || 0) + (sav.gas || 0) + (sav.diesel || 0);
+  return { cost, sav, co2, bonus, kwh, note };
+}
+
+function roundPool(t, r) {
+  const pool = ROUNDS[r].own.slice();
+  if (r === 2) ROUNDS[1].own.forEach(id => { if (!(t.chosen[1] || []).includes(id)) pool.push(id); });
+  if (r === 4) leftover2(t).forEach(id => { if (!t.deleted.includes(id)) pool.push(id); });
+  return pool;
+}
+function leftover2(t) { return roundPool(t, 2).filter(id => !(t.chosen[2] || []).includes(id)); }
+
+function validateSel(t, r, sel) {
+  const R = ROUNDS[r]; const pool = roundPool(t, r);
+  if (sel.some(id => !pool.includes(id))) return 'Ungültige Karte in der Auswahl.';
+  if (sel.length > R.pick) return `Maximal ${R.pick} Karten.`;
+  if (sel.length < R.min) return R.min === R.pick ? `Bitte genau ${R.pick} Karten wählen.` : `Bitte mindestens ${R.min} Karte wählen.`;
+  for (const [cat, label] of R.req) if (!sel.some(id => MBY[id].cat === cat)) return `Mindestens eine Maßnahme aus dem Bereich ${label} ist Pflicht.`;
+  const base = sel.reduce((s, id) => s + effective(MBY[id], t, sel).cost, 0);
+  const avail = r === 3 ? R3_BUDGET : t.budget;
+  if (base > avail) return 'Das Budget reicht nicht aus.';
+  return null;
+}
+function canSelect(t, r) {
+  const g = G();
+  if (r < 1 || r > 4 || !g.open || !t.bilanz || t.chosen[r]) return false;
+  if (r === 4 && t.chosen[2] && !t.delDone) return false;
+  return true;
+}
+
+function addLog(t, msg) { t.log.push({ ts: Date.now(), m: msg }); if (t.log.length > 25) t.log = t.log.slice(-25); }
+
+function moveTeam(t, delta, trigger) {
+  const from = t.pos;
+  t.pos = Math.max(1, Math.min(FIELDS, t.pos + delta));
+  if (trigger && t.pos !== from) {
+    if (EVENT_FIELDS.includes(t.pos)) t.cards.push({ type: 'E', field: t.pos, st: 'ready' });
+    else if (TEAM_FIELDS.includes(t.pos)) t.cards.push({ type: 'T', field: t.pos, st: 'ready' });
+  }
+  return t.pos - from;
+}
+
+/* Jede Änderung an einem Team läuft als Transaktion.
+   label != null -> vorheriger Zustand wird in die Historie gelegt (für Undo). */
+async function teamTxn(tid, mutator, label) {
+  const res = await DB.txn('state/' + tid, cur => {
+    if (cur == null) return undefined;
+    const t = parseTeam(cur); if (!t) return undefined;
+    const snapshot = label ? clone(t) : null;
+    if (snapshot) delete snapshot.undo;     // Snapshot VOR der Änderung, ohne rekursive Historie
+    if (mutator(t) === false) return undefined;
+    if (label) {
+      t.undo = Array.isArray(t.undo) ? t.undo : [];
+      t.undo.push({ s: JSON.stringify(snapshot), l: label, ts: Date.now() });
+      if (t.undo.length > 30) t.undo.shift();
+    }
+    return JSON.stringify(t);
+  });
+  return res.committed;
+}
+
+async function guarded(fn) {
+  if (state.busy) return;
+  state.busy = true;
+  try { await fn(); } finally { state.busy = false; scheduleRender(); }
+}
+
+/* ---------- Team-Aktionen ---------- */
+async function joinTeam() {
+  const tid = state.team; const name = (state.nameInput || '').trim().slice(0, 30) || teamLabel(tid);
+  await DB.txn('state/' + tid, cur => (cur ? cur : JSON.stringify(defaultTeam(name))));
+}
+
+async function checkBilanz() {
+  const parse = v => Number(String(v || '').replace(/[^\d]/g, ''));
+  const errs = {};
+  Object.keys(START).forEach(k => { if (parse(state.bf[k]) !== START[k]) errs[k] = true; });
+  state.bfErr = errs;
+  if (Object.keys(errs).length) { render(); return; }
+  await teamTxn(state.team, t => {
+    if (t.bilanz || G().round < 1) return false;
+    t.bilanz = true; t.budget += START_BUDGET;
+    moveTeam(t, 3, true);
+    addLog(t, 'Energiebilanz korrekt erstellt: +3 Felder, 100.000 € Startbudget');
+  }, 'Energiebilanz');
+}
+
+async function submitMeasures() {
+  const r = G().round; const sel = state.sel.slice();
+  const ok = await teamTxn(state.team, t => {
+    if (!canSelect(t, r) || validateSel(t, r, sel)) return false;
+    let cost = 0, bonus = 0, kwh = 0, co2 = 0; const sav = { strom: 0, gas: 0, diesel: 0 };
+    sel.forEach(id => {
+      const e = effective(MBY[id], t, sel);
+      t.impl[id] = Object.assign({ r }, e);
+      cost += e.cost; bonus += e.bonus; kwh += e.kwh; co2 += e.co2;
+      Object.keys(e.sav).forEach(k => { sav[k] += e.sav[k]; });
+    });
+    t.chosen[r] = sel;
+    if (r !== 3) t.budget -= cost;           // Runde 3: Kosten aus dem IKT-Sonderbudget
+    t.budget += bonus;                       // erspieltes Budget geht ins Hauptbudget
+    Object.keys(sav).forEach(k => { t.cons[k] -= sav[k]; });
+    t.co2 -= co2;
+    t.rs[r] = { kwh, co2, cost, bonus };
+    if (r === 3) roundPool(t, 3).forEach(id => { if (!sel.includes(id) && !t.deleted.includes(id)) t.deleted.push(id); });
+    addLog(t, `Runde ${r}: ${sel.join(', ')} umgesetzt (${fmt(kwh)} kWh, ${fmt(co2)} kg CO₂)`);
+  }, `Maßnahmen Runde ${r}`);
+  if (ok) state.sel = [];
+}
+
+async function submitDeletion() {
+  const ids = state.delSel.slice();
+  const ok = await teamTxn(state.team, t => {
+    if (!t.chosen[2] || t.delDone) return false;
+    const lo = leftover2(t); const need = Math.max(0, lo.length - 4);
+    if (ids.length !== need || ids.some(id => !lo.includes(id))) return false;
+    ids.forEach(id => t.deleted.push(id));
+    t.delDone = true;
+    addLog(t, `Karten abgegeben: ${ids.join(', ') || '–'}`);
+  }, 'Karten abgeben');
+  if (ok) state.delSel = [];
+}
+
+function applyEvent(t, e) {
+  if (e.move) moveTeam(t, e.move, false);
+  if (e.budget) t.budget += e.budget;
+  if (e.strom) { t.cons.strom += e.strom; t.co2 += Math.round(e.strom * EF.strom); }
+}
+
+async function drawCard() {
+  await teamTxn(state.team, t => {
+    const c = t.cards[0];
+    if (!c || c.st !== 'ready') return false;
+    if (c.type === 'E') {
+      let avail = EVENTS.filter(e => !t.usedE.includes(e.id));
+      if (!avail.length) { t.usedE = []; avail = EVENTS.slice(); }
+      const e = pickRandom(avail); t.usedE.push(e.id); c.id = e.id;
+      applyEvent(t, e); c.st = 'done';
+      addLog(t, `Ereigniskarte ${e.id}: ${e.effect}`);
+    } else {
+      let avail = TEAMCARDS.filter(x => !t.usedT.includes(x.id));
+      if (!avail.length) { t.usedT = []; avail = TEAMCARDS.slice(); }
+      const tc = pickRandom(avail); t.usedT.push(tc.id); c.id = tc.id;
+      if (tc.type === 'auto') {
+        const yes = tc.check.some(id => has(t, id));
+        c.ok = yes; moveTeam(t, yes ? tc.yes : tc.no, false); c.st = 'done';
+        addLog(t, `Teamkarte ${tc.id}: ${yes ? 'Ja' : 'Nein'} (${yes ? '+' + tc.yes : tc.no} Felder)`);
+      } else {
+        c.st = 'await';
+        addLog(t, `Teamkarte ${tc.id} gezogen – wartet auf Bewertung`);
+      }
+    }
+  }, 'Karte gezogen');
+}
+
+async function ackCard() {
+  await teamTxn(state.team, t => { if (!t.cards[0] || t.cards[0].st !== 'done') return false; t.cards.shift(); }, null);
+}
+
+async function answerQuestion(c) {
+  const q = G().q; if (!q || q.status !== 'open' || isExpired(q)) return;
+  await teamTxn(state.team, t => { if (t.answer && t.answer.qid === q.id) return false; t.answer = { qid: q.id, c }; }, null);
+}
+
+/* ---------- Admin-Aktionen ---------- */
+async function ensureGame() { await DB.txn('game', cur => (cur ? undefined : { round: 0, open: false })); }
+
+async function setRound(r) {
+  const g = G();
+  let msg = r === 5 ? 'Spiel beenden und Sieger anzeigen?' : r === 0 ? 'Zurück in die Lobby?' : `Runde ${r} starten?`;
+  if (g.round >= 1 && g.round <= 4 && !g.rankings[g.round] && r > g.round) msg += `\n\nAchtung: Das Ranking für Runde ${g.round} wurde noch nicht ausgewertet.`;
+  if (!confirm(msg)) return;
+  await DB.update('game', { round: r, open: false, q: null });
+}
+
+async function sendQuestion() {
+  const [r, i] = state.qSel.split('-').map(Number);
+  const g = G();
+  if (g.q && g.q.status === 'open' && !confirm('Es läuft noch eine Frage. Trotzdem ersetzen?')) return;
+  const id = `${r}-${i}-${Date.now()}`;
+  await DB.set('game/q', { id, r, i, sentAt: DB.TS(), status: 'open' });
+  await DB.set('game/sent/' + r + '-' + i, true);
+}
+
+async function revealQuestion() {
+  const q = G().q; if (!q || q.status !== 'open') return;
+  const correct = QUESTIONS[q.r].items[q.i].c;
+  let results = null;
+  const res = await DB.txn('game/q', cur => {
+    if (!cur || cur.id !== q.id || cur.status !== 'open') return undefined;
+    results = {};
+    TEAMS.forEach(tid => { const t = state.teams[tid]; if (t && t.answer && t.answer.qid === cur.id) results[tid] = t.answer.c === correct; });
+    cur.status = 'revealed'; cur.results = results;
+    return cur;
+  });
+  if (!res.committed || !results) return;
+  for (const tid of Object.keys(results)) {
+    if (!results[tid]) continue;
+    await teamTxn(tid, t => { moveTeam(t, 1, true); addLog(t, `Fragerunde ${q.r}, Frage ${q.i + 1} richtig: +1 Feld`); }, `Frage ${q.r}.${q.i + 1} richtig`);
+  }
+}
+
+async function closeQuestion() { if (G().q) await DB.update('game/q', { status: 'closed' }); }
+
+function computeRanking(r) {
+  const list = TEAMS.filter(id => state.teams[id]).map(id => {
+    const t = state.teams[id]; const s = t.rs[r] || { kwh: 0, co2: 0 };
+    return { id, name: t.name, kwh: s.kwh, co2: s.co2, done: !!t.chosen[r] };
+  });
+  list.forEach(a => {
+    a.rk = 1 + list.filter(b => b.kwh > a.kwh).length;   // Platz im Energie-Ranking
+    a.rc = 1 + list.filter(b => b.co2 > a.co2).length;   // Platz im CO2-Ranking
+    a.sum = a.rk + a.rc;                                 // Rangsumme
+  });
+  const cmp = (a, b) => (a.sum - b.sum) || (b.kwh - a.kwh) || (b.co2 - a.co2);
+  list.sort(cmp);
+  list.forEach(a => { a.place = 1 + list.filter(b => cmp(b, a) < 0).length; a.fields = Math.max(1, 5 - a.place); });
+  return list;
+}
+
+async function evaluateRanking() {
+  const g = G(); const r = g.round; if (r < 1 || r > 4) return;
+  const list = computeRanking(r);
+  if (!list.length) { alert('Es sind noch keine Teams beigetreten.'); return; }
+  if (g.rankings[r] && !confirm(`Das Ranking für Runde ${r} wurde bereits ausgewertet. Nochmals auswerten (Teams rücken erneut vor)?`)) return;
+  const missing = list.filter(a => !a.done);
+  if (missing.length && !confirm(`Noch keine Maßnahmen abgegeben: ${missing.map(a => teamName(a.id)).join(', ')}.\nDiese Teams werden mit 0 Einsparung gewertet. Fortfahren?`)) return;
+  for (const a of list) {
+    await teamTxn(a.id, t => { moveTeam(t, a.fields, true); addLog(t, `Ranking Runde ${r}: Platz ${a.place}, +${a.fields} Felder`); }, `Ranking Runde ${r}`);
+  }
+  await DB.set('game/rankings/' + r, JSON.stringify(list.map(a => ({ id: a.id, name: a.name, kwh: a.kwh, co2: a.co2, rk: a.rk, rc: a.rc, sum: a.sum, place: a.place, fields: a.fields }))));
+}
+
+async function undoTeam(tid) {
+  const current = parseTeam(await DB.get('state/' + tid));
+  const stack = current && Array.isArray(current.undo) ? current.undo : [];
+  if (!stack.length) { alert('Für dieses Team gibt es keinen Schritt zum Rückgängigmachen.'); return; }
+  const entry = stack[stack.length - 1];
+  if (!confirm(`${teamName(tid)}: Letzten Schritt „${entry.l}“ rückgängig machen?`)) return;
+  const res = await DB.txn('state/' + tid, cur => {
+    const latest = parseTeam(cur);
+    const hist = latest && Array.isArray(latest.undo) ? latest.undo : [];
+    if (!hist.length || hist[hist.length - 1].l !== entry.l || hist[hist.length - 1].ts !== entry.ts) return undefined;
+    const restored = parseTeam(hist[hist.length - 1].s);
+    if (!restored) return undefined;
+    restored.undo = hist.slice(0, -1);
+    return JSON.stringify(restored);
+  });
+  if (!res.committed) alert('Der Teamstand hat sich zwischenzeitlich geändert. Bitte prüfe das Team und versuche es erneut.');
+}
+
+async function judgeTeamCard(tid, ok) {
+  await teamTxn(tid, t => {
+    const c = t.cards[0]; if (!c || c.st !== 'await') return false;
+    const tc = TEAMCARDS.find(x => x.id === c.id);
+    c.ok = ok; moveTeam(t, ok ? tc.yes : tc.no, false); c.st = 'done';
+    addLog(t, `Teamkarte ${tc.id} ${ok ? 'richtig' : 'falsch'} (${ok ? '+' + tc.yes : tc.no} Felder)`);
+  }, 'Teamkarte bewertet');
+}
+
+async function manualMove(tid, d) {
+  await teamTxn(tid, t => { moveTeam(t, d, false); addLog(t, `Korrektur durch Spielleitung: ${d > 0 ? '+' : ''}${d} Feld`); }, 'Korrektur Spielleitung');
+}
+
+async function resetGame() {
+  if (!confirm('Das gesamte Spiel wird gelöscht (alle Teams, Fortschritte und Historie). Fortfahren?')) return;
+  if (!confirm('Wirklich sicher? Das kann nicht rückgängig gemacht werden.')) return;
+  await DB.remove('');
+  await DB.set('game', { round: 0, open: false });
+  state.dismissed = {};
+}
+
+/* ---------- Timer (lokal, Date.now() + Server-Offset) ---------- */
+function remaining(q) {
+  let start = typeof q.sentAt === 'number' ? q.sentAt : null;
+  if (start == null) { if (!state.qSeen[q.id]) state.qSeen[q.id] = DB.now(); start = state.qSeen[q.id]; }
+  const r = QUESTION_SECONDS - (DB.now() - start) / 1000;
+  return Math.max(0, Math.min(QUESTION_SECONDS, r));
+}
+function isExpired(q) { return !q || q.status !== 'open' || remaining(q) <= 0; }
+const fmtTime = s => { const x = Math.ceil(s); return `0:${String(x).padStart(2, '0')}`.replace('0:60', '1:00'); };
+
+/* =====================================================================
+   6. RENDERING  (regionsweise, nur bei Änderung -> kein Flackern)
+   ===================================================================== */
+let lastView = null; const sigs = {};
+function region(id, sig, htmlFn) {
+  const el = document.getElementById(id); if (!el) return;
+  if (sigs[id] === sig) return;
+  sigs[id] = sig; el.innerHTML = htmlFn();
+}
+let renderQueued = false;
+function scheduleRender() {
+  if (typeof document === 'undefined' || renderQueued) return;
+  renderQueued = true;
+  (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => { renderQueued = false; render(); });
+}
+
+function currentView() {
+  if (!state.role) return 'login';
+  if (state.role === 'admin') return 'admin';
+  return state.teams[state.team] ? 'team' : 'join';
+}
+
+const LAYOUTS = {
+  login: () => `<div id="r-login"></div>`,
+  join: () => `<header id="r-header"></header><main class="max-w-xl mx-auto p-4 mt-8"><div id="r-join"></div></main>`,
+  team: () => `
+    <header id="r-header"></header>
+    <main class="max-w-7xl mx-auto p-3 sm:p-4 space-y-4">
+      <div id="r-end"></div>
+      <section class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-3 sm:p-4">
+          ${boardHeaderHTML()}
+          <div id="board" class="relative"></div>
         </div>
-    </header>
-
-    <main class="flex-grow overflow-auto p-4 md:p-6" id="app">
-        
-        <!-- ================= STARTBILDSCHIRM (LOGIN) ================= -->
-        <div id="view-login" class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center border-t-4 border-ecoGreen">
-            <h2 class="text-3xl font-bold mb-6 text-gray-800">Willkommen zum Planspiel</h2>
-            <p class="mb-8 text-gray-600 text-lg">Bitte wähle dein Team aus oder logge dich als Spielleitung ein.</p>
-            
-            <div class="grid grid-cols-2 gap-4 mb-10">
-                <button onclick="loginAs('Team 1')" class="bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition text-xl shadow flex items-center justify-center gap-2">Team 1</button>
-                <button onclick="loginAs('Team 2')" class="bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition text-xl shadow flex items-center justify-center gap-2">Team 2</button>
-                <button onclick="loginAs('Team 3')" class="bg-amber-500 text-white font-bold py-4 rounded-lg hover:bg-amber-600 transition text-xl shadow flex items-center justify-center gap-2">Team 3</button>
-                <button onclick="loginAs('Team 4')" class="bg-purple-600 text-white font-bold py-4 rounded-lg hover:bg-purple-700 transition text-xl shadow flex items-center justify-center gap-2">Team 4</button>
-            </div>
-
-            <div class="border-t pt-8 bg-gray-50 rounded-b-xl -mx-8 -mb-8 pb-8">
-                <p class="text-sm text-gray-500 mb-3 font-bold uppercase tracking-wide">Nur für Spielleitung (Admin)</p>
-                <div class="flex justify-center gap-2">
-                    <input type="password" id="adminPassword" placeholder="Passwort (Trainer2026)" class="border p-2 rounded w-56 text-center shadow-inner">
-                    <button onclick="loginAsAdmin()" class="bg-gray-800 text-white font-bold py-2 px-6 rounded hover:bg-gray-900 transition shadow">Login</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= SPIELFELD (Für alle sichtbar) ================= -->
-        <div id="visual-board-container" class="hidden max-w-7xl mx-auto mb-6 bg-white rounded-xl shadow-lg p-5 border-2 border-ecoGreen">
-            <div class="flex flex-wrap justify-between items-center mb-4 pb-3 border-b">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <span>🎲</span> RE:GEBÄUDE Spielplan
-                    </h3>
-                </div>
-                <div class="flex flex-wrap gap-3 text-xs font-semibold bg-gray-50 p-2 rounded border">
-                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-red-100 border-2 border-red-500 text-center">⭐</span> Ereigniskarten</span>
-                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-purple-100 border-2 border-purple-500 text-center">🤝</span> Teamkarten</span>
-                </div>
-            </div>
-            <div id="board-grid" class="board-container overflow-x-auto min-w-[700px]"></div>
-        </div>
-
-        <!-- ================= TEAM-ANSICHT ================= -->
-        <div id="view-team" class="hidden max-w-7xl mx-auto">
-            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                
-                <!-- Linke Spalte (Dashboard & Karten-Trigger) -->
-                <div class="xl:col-span-1 space-y-6">
-                    
-                    <!-- Ereigniskarten Kasten (Manuell schließbar durch Modal) -->
-                    <div id="field-action-container" class="hidden bg-gradient-to-r from-red-50 to-purple-50 border-2 border-red-400 rounded-xl p-5 shadow-lg text-center transform transition animate-pulse">
-                        <h3 class="font-bold text-gray-800 mb-1 text-lg" id="field-action-title">Ihr steht auf einem Sonderfeld!</h3>
-                        <p class="text-sm text-gray-600 mb-4">Zieht eine Karte, um zu sehen, was passiert.</p>
-                        <button onclick="drawBoardCard()" class="bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-900 shadow-md w-full text-lg">🃏 Karte jetzt ziehen</button>
-                    </div>
-
-                    <!-- Dashboard -->
-                    <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-ecoGreen relative">
-                        <h2 class="text-2xl font-bold mb-6 pb-2 border-b text-gray-800" id="dashTeamName">Mein Dashboard</h2>
-                        
-                        <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
-                            <p class="text-xs text-gray-500 uppercase font-bold mb-1">Verfügbares Budget (Investitionen)</p>
-                            <p id="t-budget" class="text-4xl font-black text-blue-600 tracking-tight">100.000 €</p>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">CO₂-Einsparung</p>
-                                <p id="t-co2" class="text-xl font-bold text-gray-700">0 kg/a</p>
-                            </div>
-                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Energie-Einsparung</p>
-                                <p id="t-energy" class="text-xl font-bold text-ecoGreen">0 kWh/a</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Energiebilanz Tool -->
-                    <div id="energyBalanceTool" class="bg-white rounded-xl shadow-lg p-6 border-2 border-ecoYellow bg-yellow-50 hidden">
-                        <h3 class="font-bold text-lg mb-2 text-gray-800">Aufgabe: Energiebilanz erstellen</h3>
-                        <p class="text-sm text-gray-600 mb-4">Tragt die Ausgangswerte ein, um das Dashboard freizuschalten.</p>
-                        <div class="space-y-3 mb-4">
-                            <div><label class="text-xs font-bold text-gray-500">Strom (kWh):</label><input type="number" id="eb-strom" class="w-full border p-2 rounded text-sm shadow-inner"></div>
-                            <div><label class="text-xs font-bold text-gray-500">Erdgas (kWh):</label><input type="number" id="eb-gas" class="w-full border p-2 rounded text-sm shadow-inner"></div>
-                            <div><label class="text-xs font-bold text-gray-500">Diesel (kWh):</label><input type="number" id="eb-diesel" class="w-full border p-2 rounded text-sm shadow-inner"></div>
-                        </div>
-                        <button onclick="submitEnergyBalance()" class="w-full bg-ecoYellow text-black font-bold py-3 rounded shadow hover:bg-yellow-500 transition">Werte prüfen & Freischalten</button>
-                    </div>
-                </div>
-
-                <!-- Rechte Spalte (Maßnahmen) -->
-                <div class="xl:col-span-2">
-                    <div class="bg-white rounded-xl shadow-lg p-6 min-h-full">
-                        <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4">
-                            <h2 class="text-2xl font-bold text-gray-800">Maßnahmenkarten (Runde <span id="uiRoundNum">1</span>)</h2>
-                            <div class="flex gap-2">
-                                <span class="text-sm bg-blue-100 text-blue-800 font-bold px-3 py-1.5 rounded-full" id="t-budgetInfo">Budget: 100.000 €</span>
-                                <span class="text-sm bg-gray-200 text-gray-800 font-bold px-3 py-1.5 rounded-full" id="t-measuresLeft">Wählbar: 3</span>
-                            </div>
-                        </div>
-                        <p class="text-sm text-gray-600 mb-6 font-medium bg-blue-50 p-3 rounded border border-blue-100" id="t-roundRules">Wählt Maßnahmen aus.</p>
-                        <div id="t-measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= ADMIN-ANSICHT ================= -->
-        <div id="view-admin" class="hidden max-w-7xl mx-auto space-y-6">
-            <div class="bg-blue-900 text-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                    <h3 class="font-bold text-xl text-blue-100 mb-1">Trainer-Spickzettel: Lösungs-Werte für die Energiebilanz</h3>
-                    <p class="text-sm text-blue-300">Ursprüngliche Verbrauchswerte für die Teams: Strom: 219.000 | Erdgas: 415.000 | Diesel: 368.000</p>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-gray-800">
-                <div class="flex justify-between items-center mb-6 border-b pb-4">
-                    <h2 class="text-3xl font-bold text-gray-800">Spiel-Steuerung</h2>
-                    <button onclick="resetGame()" class="text-red-600 hover:text-red-800 underline font-bold text-sm bg-red-50 px-3 py-1 rounded">Vollständiger Reset</button>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Runden & Ranking -->
-                    <div class="bg-gray-50 p-4 rounded-lg border">
-                        <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Spielrunden steuern</h3>
-                        <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button onclick="adminSetRound(1)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 1</button>
-                            <button onclick="adminSetRound(2)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 2</button>
-                            <button onclick="adminSetRound(3)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 3</button>
-                            <button onclick="adminSetRound(4)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 4</button>
-                        </div>
-                        <button onclick="adminEvalRanking()" class="w-full bg-purple-600 text-white px-4 py-3 rounded font-bold hover:bg-purple-700 transition shadow">🏁 Runden-Ranking auswerten (Teams vorrücken)</button>
-                    </div>
-
-                    <!-- Neue, strikte Fragen-Steuerung -->
-                    <div class="bg-gray-50 p-4 rounded-lg border flex flex-col justify-between border-ecoYellow">
-                        <div>
-                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Seminar-Fragerunden</h3>
-                            <select id="adminQuestionSelect" class="w-full border p-3 rounded mb-4 font-medium shadow-inner bg-white"></select>
-                        </div>
-                        <div class="flex flex-col gap-2 mt-auto">
-                            <button onclick="adminStartQuestion()" class="bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border">1. Frage an alle senden (60s Timer)</button>
-                            <button onclick="adminResolveQuestion()" class="bg-blue-600 text-white px-4 py-3 rounded font-bold hover:bg-blue-700 shadow">2. Antwort auflösen & Teams weiterrücken</button>
-                            <button onclick="adminCloseQuestion()" class="bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">3. Frage-Fenster bei allen schließen</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <h3 class="text-xl font-bold text-gray-800 pt-4">Live-Status der Teams</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="adminTeamsGrid"></div>
-        </div>
-
+        <div id="r-side"></div>
+      </section>
+      <div id="r-cards"></div>
+      <div id="r-bilanz"></div>
+      <section class="grid lg:grid-cols-3 gap-4">
+        <div id="r-dash" class="lg:col-span-2"></div>
+        <div id="r-rank"></div>
+      </section>
+      <section id="r-measures" class="space-y-4"></section>
     </main>
-
-    <!-- ================= MODAL: SEMINAR-FRAGEN (60 Sekunden Timer) ================= -->
-    <div id="questionModal" class="hidden fixed inset-0 modal-bg z-[100] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-3xl w-full relative border-t-8 border-ecoYellow">
-            <div class="absolute top-0 left-0 h-2 bg-ecoGreen timer-bar" id="q-timer-bar" style="width: 100%;"></div>
-            <div class="flex justify-between items-center mb-6 mt-2">
-                <h2 class="text-2xl font-bold text-gray-800" id="qm-title">Seminar-Fragerunde</h2>
-                <span class="bg-gray-800 text-white font-mono font-bold px-4 py-2 rounded text-2xl shadow" id="q-timer-text">60</span>
-            </div>
-            <p class="text-xl mb-8 font-medium text-gray-700 leading-relaxed" id="qm-text">Frage Text...</p>
-            <div id="qm-options" class="flex flex-col gap-3"></div>
-            <div id="qm-feedback" class="mt-6 p-4 rounded-lg hidden text-center"></div>
+    <div id="r-modal"></div>`,
+  admin: () => `
+    <header id="r-header"></header>
+    <main class="max-w-7xl mx-auto p-3 sm:p-4 space-y-4">
+      <div id="r-end"></div>
+      <section class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-3 sm:p-4">
+          ${boardHeaderHTML()}
+          <div id="board" class="relative"></div>
         </div>
-    </div>
-
-    <!-- ================= MODAL: SPIELFELD-KARTEN (Ereignis & Team) ================= -->
-    <div id="cardModal" class="hidden fixed inset-0 modal-bg z-[90] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center border-t-8" id="cm-border">
-            <div class="text-5xl mb-4" id="cm-icon">⭐</div>
-            <h2 class="text-3xl font-black mb-4 text-gray-800" id="cm-title">Gezogene Karte</h2>
-            <p class="text-lg mb-6 text-gray-700 leading-relaxed" id="cm-text">Kartenbeschreibung...</p>
-            <div id="cm-effect" class="bg-gray-100 p-4 rounded-lg mb-8 font-bold text-xl text-ecoGreen border-2 border-gray-200"></div>
-            <button onclick="closeCardModal()" class="bg-gray-800 text-white font-bold py-3 px-10 rounded-lg hover:bg-gray-900 shadow-lg text-lg">Schließen & Weiter</button>
+        <div id="r-side"></div>
+      </section>
+      <h2 class="text-xl font-extrabold text-eco-900 pt-2">Kontroll-Zentrum</h2>
+      <section class="grid lg:grid-cols-2 gap-4">
+        <div id="r-adm-round"></div>
+        <div class="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+          <div id="r-adm-qctrl"></div>
+          <div id="r-adm-qlive"></div>
         </div>
+      </section>
+      <div id="r-adm-rank"></div>
+      <div id="r-adm-teams"></div>
+      <div id="r-adm-danger"></div>
+    </main>`
+};
+
+/* ---------- Header ---------- */
+function headerHTML() {
+  const g = G(); const r = g.round;
+  const roundTxt = r === 0 ? 'Lobby – warten auf Spielstart' : r >= 5 ? 'Spiel beendet' : `Runde ${r}/4 · ${ROUNDS[r].title}`;
+  const conn = DB.mode === 'demo'
+    ? `<span class="text-xs font-semibold px-2 py-1 rounded-full bg-yellow-300 text-yellow-900" title="Firebase-Config fehlt – Daten nur lokal">Demo-Modus (lokal)</span>`
+    : state.connected ? `<span class="text-xs font-semibold px-2 py-1 rounded-full bg-eco-400 text-eco-900">● Live verbunden</span>`
+                      : `<span class="text-xs font-semibold px-2 py-1 rounded-full bg-red-500 text-white">● Verbindung getrennt</span>`;
+  let who = '';
+  if (state.role === 'admin') who = `<span class="text-sm font-semibold px-3 py-1 rounded-full bg-white/10">Spielleitung</span>`;
+  else if (state.team) { const m = TEAM_META[state.team]; who = `<span class="text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-2 bg-white/10"><span class="w-3 h-3 rounded-full" style="background:${m.color}"></span>${esc(teamName(state.team))}</span>`; }
+  return `<div class="bg-eco-900 text-white">
+    <div class="max-w-7xl mx-auto px-3 sm:px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div class="font-extrabold text-xl tracking-tight">RE<span class="text-eco-400">▸</span>GEBÄUDE</div>
+      ${who}
+      <span class="text-sm text-eco-100">${esc(roundTxt)}</span>
+      <div class="ml-auto flex items-center gap-2">${conn}
+        <button data-act="logout" class="text-sm px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-eco-300">Abmelden</button>
+      </div>
+    </div></div>`;
+}
+
+/* ---------- Login & Beitritt ---------- */
+function loginHTML() {
+  const teamBtns = TEAMS.map(id => {
+    const t = state.teams[id], m = TEAM_META[id];
+    return `<button data-act="pick-team" data-t="${id}" class="rounded-2xl bg-white border-2 border-slate-200 hover:border-slate-400 p-4 text-left shadow-sm hover:shadow-md transition focus:outline-none focus-visible:ring-4 focus-visible:ring-eco-400">
+      <div class="flex items-center gap-3">
+        <span class="w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-lg shrink-0" style="background:${m.color};color:${m.fg}">${m.n}</span>
+        <div><div class="font-bold text-lg">Team ${m.n}</div>
+        <div class="text-sm text-slate-500">${t ? esc(t.name) + ' · Feld ' + t.pos : 'noch frei'}</div></div>
+      </div></button>`;
+  }).join('');
+  const adminBox = state.loginMode === 'admin'
+    ? `<div class="mt-3 flex gap-2">
+         <label class="sr-only" for="pw">Passwort</label>
+         <input id="pw" data-bind="pw" type="password" value="${esc(state.pw)}" placeholder="Passwort" autocomplete="off"
+           class="flex-1 rounded-lg border-2 px-3 py-2 focus:outline-none focus:border-eco-600 ${state.pwErr ? 'border-red-500' : 'border-slate-200'}">
+         <button data-act="admin-login" class="px-4 py-2 rounded-lg bg-eco-700 text-white font-semibold hover:bg-eco-800">Anmelden</button>
+       </div>${state.pwErr ? '<p class="text-sm text-red-600 mt-1" role="alert">Falsches Passwort.</p>' : ''}`
+    : `<button data-act="show-admin" class="mt-3 px-4 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-900">Als Spielleitung anmelden</button>`;
+  const demo = DB.mode === 'demo' ? `<div class="mt-6 rounded-xl bg-yellow-50 border border-yellow-300 p-3 text-sm text-yellow-900"><b>Demo-Modus:</b> Es ist noch keine Firebase-Config hinterlegt. Das Spiel läuft lokal in diesem Browser – öffne weitere Tabs, um Teams und Spielleitung parallel zu testen.</div>` : '';
+  return `<div class="min-h-screen flex flex-col">
+    <div class="bg-eco-900 text-white">
+      <div class="max-w-4xl mx-auto px-4 py-10">
+        <div class="text-sm font-semibold text-eco-300 uppercase tracking-widest">Planspiel Energieeffizienz</div>
+        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight mt-1">RE<span class="text-eco-400">▸</span>GEBÄUDE</h1>
+        <p class="mt-3 text-eco-100 max-w-2xl">Spart im Verwaltungsgebäude der RKW Metallbau GmbH möglichst viel Energie und CO₂ – und erreicht als erstes Team das Ziel.</p>
+      </div>
     </div>
-
-
-    <script>
-        // =========================================================================
-        // HIER DEINE FIREBASE DATEN EINTRAGEN (aus firebaseConfig)
-        // =========================================================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyBU_L3Nyv-0-40mTmdQqmRA_R1VINvakAE",
-            authDomain: "re-gebaeude.firebaseapp.com",
-            databaseURL: "https://re-gebaeude-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "re-gebaeude",
-            storageBucket: "re-gebaeude.firebasestorage.app",
-            messagingSenderId: "6180416357",
-            appId: "1:6180416357:web:630c847ef6fa8e940b4f8c"
-        };
-
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
-        const TOTAL_FIELDS = 40;
-        
-        // Definition der Spezialfelder
-        const SPECIAL_FIELDS = {
-            4: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            6: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            8: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            11: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            14: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            16: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            19: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            21: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            24: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            26: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            29: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            31: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            34: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-            36: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
-            39: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
-        };
-
-        const TEAM_COLORS = { "Team 1": "bg-blue-600", "Team 2": "bg-emerald-600", "Team 3": "bg-amber-500", "Team 4": "bg-purple-600" };
-
-        // Echte Ereignis- und Teamkarten aus dem PDF
-        const EREIGNIS_KARTEN = [
-            { title: "Energieeffizienznetzwerk", text: "Ihr Geschäftsführer hat entschieden, sich an einem Energieeffizienznetzwerk zu beteiligen. Dies bringt einen zusätzlichen Schub.", effect: "+2 Felder vor", change: 2, type: "pos" },
-            { title: "Energiescouts", text: "Zwei Auszubildende aus Ihrem Betrieb werden kostenfrei zu 'Energiescouts' weitergebildet. Das wirkt sich positiv aus.", effect: "+1 Feld vor", change: 1, type: "pos" },
-            { title: "Wettbewerb Gewonnen!", text: "Sie haben einen Preis bei einem Energieeffizienz-Wettbewerb gewonnen.", effect: "+ 5.000 € für Ihr Budget", budget: 5000, type: "pos" },
-            { title: "Fahrstuhl-Verzicht", text: "Die Mitarbeiter/innen haben einen Monat lang den Fahrstuhl nicht benutzt. Dadurch werden ca. 500 kWh Strom eingespart.", effect: "+1 Feld vor", change: 1, type: "pos" },
-            { title: "Dichtungen repariert", text: "Der Hausmeister prüft alle Türen/Fenster und repariert diese. Damit wird das Wohlfühlklima gesteigert und Energie gespart.", effect: "+1 Feld vor", change: 1, type: "pos" },
-            { title: "Hitze im Sommer", text: "Im Sommer steigt die Temperatur im Büro über 30°C. Es muss eine Klimaanlage installiert werden.", effect: "- 5.000 € Zusatzkosten", budget: -5000, type: "neg" }
-        ];
-
-        // Teamkarten prüfen automatisch, ob bestimmte Maßnahmen gekauft wurden
-        const TEAM_KARTEN = [
-            { title: "Mitarbeiter Verhalten", text: "Nennen Sie 3 Bereiche, bei denen Mitarbeiter Einfluss auf Energieeinsparung nehmen können.", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
-            { title: "Schulung", text: "Wurden die Mitarbeiter/innen zum Thema Energie geschult?", checkReq: "A1", effectOk: "Ja (Maßnahme A1 gekauft) -> +2 Felder vor", effectFail: "Nein -> -2 Felder zurück", ok: 2, fail: -2 },
-            { title: "Heizungskonzept", text: "Wurde ein Heizungskonzept erstellt?", checkReq: "A3", effectOk: "Ja (Maßnahme A3 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
-            { title: "Stand-by Geräte", text: "Nennen Sie drei Geräte, die nach Arbeitsschluss im Stand-by sind.", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
-            { title: "PC Stromverbrauch", text: "Wann verbraucht ein PC keinen Strom mehr? (Antwort: Wenn komplett vom Netz genommen)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
-            { title: "Fahrertraining", text: "Haben die Vertriebsmitarbeiter/innen ein Fahrertraining absolviert?", checkReq: "B2", effectOk: "Ja (Maßnahme B2 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
-            { title: "Beleuchtung umgestellt", text: "Wurde die Beleuchtung auf LED umgestellt?", checkReq: "C2_or_C3", effectOk: "Ja (Maßnahme C2/C3 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
-            { title: "Licht sensibilisiert", text: "Wurden die Mitarbeiter/innen zum Thema Licht sensibilisiert?", checkReq: "C1", effectOk: "Ja (Maßnahme C1 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
-            { title: "Umwälzpumpe", text: "Wie viel Energie kann mit hocheffizienter Umwälzpumpe gespart werden? (Antwort: ca. 80%)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
-            { title: "Leuchtstoffröhre", text: "Ab wann lohnt sich das Ausschalten einer Leuchtstoffröhre? (Antwort: Sofort)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true }
-        ];
-
-        const QUESTIONS = [
-            { id: "q1", r: 1, text: "Wie hoch war der Anteil erneuerbarer Energien am deutschen Bruttostromverbrauch im Jahr 2025?", opts: ["A. Etwa 40 %", "B. Etwa 55,1 %", "C. Etwa 80 %"], correct: 1 },
-            { id: "q2", r: 1, text: "Wie hoch waren die durchschnittlichen direkten CO₂-Emissionen des in Deutschland verbrauchten Stroms im Jahr 2025 ungefähr?", opts: ["A. Etwa 50 g CO₂/kWh", "B. Etwa 344 g CO₂/kWh", "C. Etwa 600 g CO₂/kWh"], correct: 1 },
-            { id: "q3", r: 1, text: "Welche Klimaschutzziele sind im deutschen Bundes-Klimaschutzgesetz festgelegt?", opts: ["A. Mindestens 55 % bis 2030, Neutralität 2050", "B. Mindestens 65 % bis 2030, 88 % bis 2040 und Klimaneutralität bis 2045", "C. Mindestens 80 % bis 2030"], correct: 1 },
-            { id: "q4", r: 1, text: "Ein Verwaltungsgebäude verbraucht im Jahr 12.000 kWh Strom. Wie hoch sind die direkten CO₂-Emissionen (Faktor 344 g CO₂/kWh)?", opts: ["A. Etwa 0,41 t CO₂", "B. Etwa 4,13 t CO₂", "C. Etwa 41,3 t CO₂"], correct: 1 },
-            { id: "q5", r: 1, text: "Vergleich 1.000 kWh Erdgas und Strom. Welche Aussage ist richtig?", opts: ["A. Emissionen sind identisch", "B. Lassen sich nur durch Emissionsfaktoren und Systemgrenzen bestimmen", "C. Strom verursacht grundsätzlich mehr"], correct: 1 },
-            { id: "q6", r: 1, text: "Welcher Kennwert eignet sich, um Energieverbrauch unterschiedlich großer Gebäude zu vergleichen?", opts: ["A. Absoluter Jahresverbrauch", "B. Flächenbezogener Verbrauch in kWh/m²a", "C. Jährliche Energiekosten"], correct: 1 },
-            { id: "q7", r: 2, text: "Welcher Kraftstoff verursacht geringere CO₂-Emissionen pro 100 km? (E10: 7,3 l vs Diesel: 5,4 l)", opts: ["A. E10 ist geringer", "B. Diesel (ca. 14 kg) ist geringer als E10 (ca. 17 kg)", "C. Beide gleich"], correct: 1 },
-            { id: "q8", r: 2, text: "Warum lässt sich Klimawirkung von E10 und Diesel nicht allein am CO₂ pro Liter vergleichen?", opts: ["A. Energiegehalt spielt keine Rolle", "B. Vorketten, biogene Bestandteile, realer Verbrauch müssen berücksichtigt werden", "C. Sie verursachen immer denselben Verbrauch"], correct: 1 },
-            { id: "q9", r: 2, text: "Einfluss der Geschwindigkeit auf den Energieverbrauch eines Pkw?", opts: ["A. Steigt linear", "B. Luftwiderstand steigt stark und wird dominierend", "C. Luftwiderstand spielt oberhalb von 100 km/h keine Rolle"], correct: 1 },
-            { id: "q10", r: 2, text: "Zwei LED-Leuchten: A (40W, 4000lm) vs B (50W, 4500lm).", opts: ["A. Leuchte A hat höhere Lichtausbeute (100 lm/W)", "B. Leuchte B hat höhere Lichtausbeute", "C. Beide gleich"], correct: 0 },
-            { id: "q11", r: 2, text: "Bewertung einer Beleuchtungssanierung: Was ist sinnvoll?", opts: ["A. Nur Watt und Preis", "B. Lichtstrom, Beleuchtungsstärke, Blendung, Betriebsstunden, Energieverbrauch", "C. Nur Anzahl"], correct: 1 },
-            { id: "q12", r: 2, text: "Büro von Leuchtstoff auf LED umrüsten. Was ist korrekt?", opts: ["A. LED ist immer geeignet", "B. Neben Leistung müssen Kompatibilität, Lichtverteilung, Blendung geprüft werden", "C. Beleuchtungsstärke kann vernachlässigt werden"], correct: 1 },
-            { id: "q13", r: 3, text: "Welche ISO-Norm beschreibt Anforderungen an ein Energiemanagementsystem?", opts: ["A. ISO 14001", "B. ISO 50001", "C. ISO 27001"], correct: 1 },
-            { id: "q14", r: 3, text: "Was beschreibt der PUE bei Rechenzentren?", opts: ["A. Verhältnis Speicher zu Server", "B. Verhältnis Gesamtenergieverbrauch zu Energieverbrauch der IT-Komponenten", "C. Verhältnis Rechenleistung"], correct: 1 },
-            { id: "q15", r: 3, text: "Rechenzentrum Gesamt 1.200 MWh, davon 1.000 MWh IT. PUE-Wert?", opts: ["A. 0,83", "B. 1,20", "C. 2,20"], correct: 1 },
-            { id: "q16", r: 3, text: "Aussagekraft COP bei Kühlsystemen?", opts: ["A. Verhältnis von Kälteleistung zu elektrischer Leistung", "B. Lebensdauer", "C. Verhältnis Preis zu Kosten"], correct: 0 },
-            { id: "q17", r: 3, text: "Laptop vs Desktop: Nachhaltigkeitsbewertung?", opts: ["A. Laptop immer nachhaltiger", "B. Neben Betrieb müssen Herstellung, Nutzungsdauer, Entsorgung betrachtet werden", "C. Desktop immer nachhaltiger"], correct: 1 },
-            { id: "q18", r: 3, text: "Maßnahme für längere Arbeitspause am PC?", opts: ["A. Bildschirmschoner", "B. Bildschirm aus, Rechner in Energiesparmodus oder ausschalten", "C. Auflösung erhöhen"], correct: 1 },
-            { id: "q19", r: 4, text: "Was beschreibt der COP einer Wärmepumpe?", opts: ["A. Verhältnis der abgegebenen Wärmeleistung zur elektrischen Leistung", "B. Verhältnis Investition zu Lebensdauer", "C. Jährliche Veränderung"], correct: 0 },
-            { id: "q20", r: 4, text: "Wärmepumpe mit COP von 4 bedeutet?", opts: ["A. Benötigt für 4 kWh Wärme 4 kWh Strom", "B. Gibt etwa 4 kWh Wärme je 1 kWh eingesetzter elektrischer Energie ab", "C. Erreicht 400% Einsparung"], correct: 1 },
-            { id: "q21", r: 4, text: "Welcher Kennwert bewertet Wärmepumpe über ein ganzes Jahr?", opts: ["A. COP eines Prüfpunktes", "B. Jahresarbeitszahl (SCOP)", "C. Nennleistung"], correct: 1 },
-            { id: "q22", r: 4, text: "Aussage zum U-Wert eines Bauteils?", opts: ["A. Hoher U-Wert schützt gut", "B. Niedriger U-Wert bedeutet geringeren Wärmedurchgang", "C. Nur Luftdichtheit"], correct: 1 },
-            { id: "q23", r: 4, text: "Warum nach Dämmung Heizungsanlage überprüfen?", opts: ["A. Höherer Wärmebedarf", "B. Wärmebedarf sinkt -> Vorlauftemperatur / Heizkurve anpassen", "C. Höhere Vorlauftemperatur nötig"], correct: 1 },
-            { id: "q24", r: 4, text: "Zusammenspiel Dämmung, Luftdichtheit, Lüftung?", opts: ["A. Macht Lüftung überflüssig", "B. Dichtere Hülle reduziert Wärmeverlust, erfordert aber angepasstes Lüftungskonzept", "C. Verhindert Feuchtigkeit grundsätzlich"], correct: 1 }
-        ];
-
-        const MEASURES = [
-            { id: "A1", r: 1, title: "Mitarbeiter-Schulung Energie", cost: 6000, saveE: 10000, saveCO2: 3300, bonus: 1200, cat: "allg" },
-            { id: "A2", r: 1, title: "Schulung Einkauf/Controlling", cost: 3000, saveE: 0, saveCO2: 0, bonus: 20000, cat: "allg" },
-            { id: "A3", r: 1, title: "Heizungskonzept erstellen", cost: 2500, saveE: 0, saveCO2: 0, bonus: 0, cat: "allg", flags: "heizungskonzept" },
-            { id: "A4", r: 1, title: "Lüftungsplan erstellen", cost: 0, saveE: 21000, saveCO2: 5700, bonus: 500, cat: "allg" },
-            { id: "A5", r: 1, title: "Beleuchtungskonzept", cost: 3000, saveE: 0, saveCO2: 0, bonus: 0, cat: "allg", flags: "lichtkonzept" },
-            { id: "A6", r: 1, title: "PV-Anlage + Speicher", cost: 15000, saveE: 12000, saveCO2: 7200, bonus: 1400, cat: "allg" },
-            { id: "B1", r: 2, title: "Reifenkontrollsystem nachrüsten", cost: 1800, saveE: 6000, saveCO2: 1600, bonus: 300, cat: "fuhrpark" },
-            { id: "B2", r: 2, title: "Fahrertraining Vertrieb", cost: 5000, saveE: 55000, saveCO2: 14900, bonus: 3000, cat: "fuhrpark" },
-            { id: "B3", r: 2, title: "Reiseroutensoftware", cost: 16800, saveE: 73000, saveCO2: 19700, bonus: 4000, cat: "fuhrpark" },
-            { id: "B4", r: 2, title: "5 E-Autos (Nahbereich)", cost: 100000, saveE: 43000, saveCO2: 6000, bonus: 2400, cat: "fuhrpark" },
-            { id: "C1", r: 2, title: "Sensibilisierung Beleuchtung", cost: 0, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "licht" },
-            { id: "C2", r: 2, title: "LED-Retrofit (1:1)", cost: 7000, saveE: 30000, saveCO2: 18000, bonus: 3500, cat: "licht" },
-            { id: "C3", r: 2, title: "Umstellung auf LED-Panels", cost: 9000, saveE: 37000, saveCO2: 22200, bonus: 4300, cat: "licht", reqFlag: "lichtkonzept", penaltyCost: 5000, penaltyE: 7000, penaltyCO2: 4200, penaltyBonus: 800 },
-            { id: "D1", r: 3, title: "Tintenstrahl statt Laser", cost: 5800, saveE: 3000, saveCO2: 1800, bonus: 300, cat: "ikt" },
-            { id: "D2", r: 3, title: "Standby abschaffen", cost: 500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "ikt" },
-            { id: "D3", r: 3, title: "Einstellungen Monitore", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
-            { id: "D4", r: 3, title: "Server virtualisieren", cost: 3000, saveE: 4000, saveCO2: 2400, bonus: 500, cat: "ikt" },
-            { id: "D5", r: 3, title: "Serverraum Temp erhöhen", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
-            { id: "E1", r: 4, title: "Heizkörper entlüften", cost: 0, saveE: 21000, saveCO2: 5000, bonus: 500, cat: "heizung" },
-            { id: "E2", r: 4, title: "Heizungspumpen tauschen", cost: 1500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "heizung" },
-            { id: "E3", r: 4, title: "Temp.Steuerung & Hydr. Abgleich", cost: 7500, saveE: 42000, saveCO2: 10100, bonus: 1100, cat: "heizung" },
-            { id: "E4", r: 4, title: "Brennwertkessel", cost: 18000, saveE: 62000, saveCO2: 14900, bonus: 1600, cat: "heizung", reqFlag: "heizungskonzept", penaltyCost: 5000, penaltyE: 0, penaltyCO2: 0, penaltyBonus: 0 },
-            { id: "E5", r: 4, title: "Wartungsvertrag Heizung", cost: 2000, saveE: 8000, saveCO2: 1900, bonus: 200, cat: "heizung" },
-            { id: "E6", r: 4, title: "Zeitschaltuhren Boiler", cost: 100, saveE: 5000, saveCO2: 3000, bonus: 600, cat: "heizung" },
-            { id: "F1", r: 4, title: "Dichtungen tauschen", cost: 2500, saveE: 8000, saveCO2: 1900, bonus: 200, cat: "daemmung" },
-            { id: "F2", r: 4, title: "Fenster austauschen", cost: 150000, saveE: 60000, saveCO2: 14400, bonus: 1500, cat: "daemmung" },
-            { id: "F3", r: 4, title: "Dachdämmung erneuern", cost: 88000, saveE: 75000, saveCO2: 18000, bonus: 1900, cat: "daemmung" }
-        ];
-
-        const INITIAL_TEAM_STATE = {
-            budget: 100000, 
-            co2Saved: 0, 
-            energySaved: 0, 
-            position: 1, 
-            balanceDone: false,
-            measuresTaken: {},
-            flags: {},
-            drawnCards: {},
-            history: [],
-            questionAnswers: {}
-        };
-
-        let currentRole = null; 
-        let globalState = { round: 1, activeQuestion: null, questionState: 'hidden', questionStartTime: 0 };
-        let teamsState = {
-            "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-            "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-            "Team 3": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-            "Team 4": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE))
-        };
-        
-        let timerInterval = null;
-
-        db.ref('re-gebaeude/global').on('value', snap => {
-            if(snap.val()) {
-                globalState = snap.val();
-                handleQuestionModalState(); // Update Question UI based on Global State
-                if(currentRole === "Admin" || (currentRole && currentRole.startsWith("Team"))) {
-                    updateUI(); // Safe to update basic text/grids
-                }
-            }
-        });
-
-        db.ref('re-gebaeude/teams').on('value', snap => {
-            if(snap.val()) {
-                const serverTeams = snap.val();
-                Object.keys(teamsState).forEach(tk => {
-                    if(serverTeams[tk]) {
-                        teamsState[tk] = serverTeams[tk];
-                        // Failsafe für alte Datenbankstände
-                        if (teamsState[tk].budget === undefined || isNaN(teamsState[tk].budget)) {
-                            teamsState[tk].budget = 100000;
-                        }
-                    }
-                });
-                if(currentRole === "Admin" || (currentRole && currentRole.startsWith("Team"))) {
-                    updateUI();
-                }
-            }
-        });
-
-        function pushGlobal() { db.ref('re-gebaeude/global').set(globalState); }
-        function pushTeam(teamName) { db.ref('re-gebaeude/teams/' + teamName).set(teamsState[teamName]); }
-        function pushAllTeams() { db.ref('re-gebaeude/teams').set(teamsState); }
-
-        function loginAs(teamName) {
-            currentRole = teamName;
-            document.getElementById('headerRole').innerText = "Angemeldet als: " + teamName;
-            document.getElementById('dashTeamName').innerText = teamName + " - Dashboard";
-            document.getElementById('view-login').classList.add('hidden');
-            document.getElementById('visual-board-container').classList.remove('hidden');
-            document.getElementById('view-team').classList.remove('hidden');
-            updateUI();
-        }
-
-        function loginAsAdmin() {
-            if(document.getElementById('adminPassword').value === "Trainer2026") {
-                currentRole = 'Admin';
-                document.getElementById('headerRole').innerText = "Spielleitung (Trainer)";
-                document.getElementById('view-login').classList.add('hidden');
-                document.getElementById('visual-board-container').classList.remove('hidden');
-                document.getElementById('view-admin').classList.remove('hidden');
-                
-                const sel = document.getElementById('adminQuestionSelect');
-                sel.innerHTML = "";
-                QUESTIONS.forEach(q => {
-                    sel.innerHTML += `<option value="${q.id}">Runde ${q.r}: ${q.text.substring(0,50)}...</option>`;
-                });
-                updateUI();
-            } else {
-                alert("Falsches Passwort!");
-            }
-        }
-
-        function updateUI() {
-            document.getElementById('headerRoundInfo').classList.remove('hidden');
-            document.getElementById('roundDisplay').innerText = "Runde " + globalState.round;
-            document.getElementById('uiRoundNum').innerText = globalState.round;
-
-            renderVisualBoard();
-
-            if(currentRole && currentRole.startsWith("Team")) {
-                renderTeamDashboard();
-                renderMeasures();
-            } else if (currentRole === "Admin") {
-                renderAdminTeams();
-            }
-        }
-
-        function renderVisualBoard() {
-            const grid = document.getElementById('board-grid');
-            grid.innerHTML = "";
-
-            for(let i = 1; i <= TOTAL_FIELDS; i++) {
-                let spec = SPECIAL_FIELDS[i];
-                let fieldBg = "bg-white border-gray-200";
-                let label = `Feld ${i}`;
-                let icon = "";
-
-                if (i === 1) {
-                    fieldBg = "bg-green-100 border-green-500 font-bold shadow-inner";
-                    label = "START";
-                    icon = "🚀";
-                } else if (i === TOTAL_FIELDS) {
-                    fieldBg = "bg-amber-100 border-amber-500 font-bold shadow-inner";
-                    label = "ZIEL";
-                    icon = "🏆";
-                } else if (spec) {
-                    fieldBg = spec.color + " shadow-inner font-bold";
-                    label = spec.label;
-                    icon = spec.icon;
-                }
-
-                // Echte Schlangenlinie (Snake-Path)
-                let row = Math.floor((i - 1) / 10) + 1;
-                let col = (i - 1) % 10 + 1;
-                if (row % 2 === 0) col = 11 - col;
-
-                let pawnsHere = [];
-                Object.keys(teamsState).forEach(tName => {
-                    if (teamsState[tName].position === i) {
-                        pawnsHere.push(tName);
-                    } else if (i === TOTAL_FIELDS && teamsState[tName].position >= TOTAL_FIELDS) {
-                        pawnsHere.push(tName);
-                    }
-                });
-
-                grid.innerHTML += `
-                    <div class="board-field ${fieldBg}" style="grid-column: ${col}; grid-row: ${row};">
-                        <div class="flex w-full justify-between items-center text-[11px] opacity-90 px-1 pt-1">
-                            <span class="font-black text-gray-500">${i}</span>
-                            <span class="text-sm">${icon}</span>
-                        </div>
-                        <div class="pawn-container p-1">
-                            ${pawnsHere.map(p => `<span class="pawn-badge ${TEAM_COLORS[p]}" title="${p}">${p.replace('Team ', 'T')}</span>`).join('')}
-                        </div>
-                        <div class="text-[9px] uppercase tracking-wider font-bold w-full text-center pb-1 truncate">${label}</div>
-                    </div>
-                `;
-            }
-        }
-
-        function renderTeamDashboard() {
-            const tState = teamsState[currentRole];
-            document.getElementById('t-budget').innerText = new Intl.NumberFormat('de-DE').format(tState.budget) + " €";
-            document.getElementById('t-co2').innerText = new Intl.NumberFormat('de-DE').format(tState.co2Saved) + " kg/a";
-            document.getElementById('t-energy').innerText = new Intl.NumberFormat('de-DE').format(tState.energySaved) + " kWh/a";
-
-            const tool = document.getElementById('energyBalanceTool');
-            if(globalState.round === 1 && !tState.balanceDone) {
-                tool.classList.remove('hidden');
-            } else {
-                tool.classList.add('hidden');
-            }
-
-            // Check für manuelle Board-Karten
-            const fieldAction = document.getElementById('field-action-container');
-            const spec = SPECIAL_FIELDS[tState.position];
-            
-            if (spec && tState.balanceDone) {
-                if (!tState.drawnCards || !tState.drawnCards[tState.position]) {
-                    fieldAction.classList.remove('hidden');
-                    document.getElementById('field-action-title').innerText = `Du stehst auf einem ${spec.label}-Feld!`;
-                } else {
-                    fieldAction.classList.add('hidden');
-                }
-            } else {
-                fieldAction.classList.add('hidden');
-            }
-        }
-
-        function submitEnergyBalance() {
-            const stromVal = parseInt(document.getElementById('eb-strom').value) || 0;
-            const gasVal = parseInt(document.getElementById('eb-gas').value) || 0;
-            const dieselVal = parseInt(document.getElementById('eb-diesel').value) || 0;
-
-            if(stromVal === 219000 && gasVal === 415000 && dieselVal === 368000) {
-                const tState = teamsState[currentRole];
-                tState.history.push(JSON.stringify(tState));
-                tState.balanceDone = true;
-                tState.position += 3;
-                pushTeam(currentRole);
-                alert("Energiebilanz erfolgreich erstellt! Ihr rückt 3 Felder vor.");
-            } else {
-                alert("Die Werte stimmen nicht. Bitte prüft Strom (219.000), Erdgas (415.000) und Diesel (368.000)!");
-            }
-        }
-
-        function renderMeasures() {
-            const grid = document.getElementById('t-measuresGrid');
-            grid.innerHTML = '';
-            const tState = teamsState[currentRole];
-            
-            let availableBudget = globalState.round === 3 ? 6000 : tState.budget;
-            
-            let infoText = "";
-            if (globalState.round === 1) infoText = `Vorbeugende Maßnahmen`;
-            if (globalState.round === 2) infoText = `Fuhrpark & Beleuchtung (mind. 1x Fuhrpark, 1x Licht)`;
-            if (globalState.round === 3) infoText = `IKT. Sonderbudget: 6.000 €`;
-            if (globalState.round === 4) infoText = `Heizung & Dämmung (mind. 1x Heizung, 1x Dämmung)`;
-            
-            document.getElementById('t-roundRules').innerText = infoText;
-            document.getElementById('t-budgetInfo').innerText = `Verfügbar: ${new Intl.NumberFormat('de-DE').format(availableBudget)} €`;
-
-            let availableMeasures = MEASURES.filter(m => m.r <= globalState.round && (!tState.measuresTaken[m.id] || tState.measuresTaken[m.id] === globalState.round));
-            availableMeasures.sort((a,b) => b.r - a.r);
-
-            let chosenThisRoundCount = 0;
-            Object.keys(tState.measuresTaken).forEach(k => {
-                if(tState.measuresTaken[k] === globalState.round) chosenThisRoundCount++;
-            });
-
-            document.getElementById('t-measuresLeft').innerText = `Gewählt: ${chosenThisRoundCount} / 3`;
-
-            availableMeasures.forEach(measure => {
-                const isTaken = !!tState.measuresTaken[measure.id];
-                let realCost = measure.cost;
-                let realSaveE = measure.saveE;
-                let realSaveCO2 = measure.saveCO2;
-                
-                if (measure.reqFlag && !tState.flags[measure.reqFlag]) {
-                    realCost += measure.penaltyCost || 0;
-                    realSaveE -= measure.penaltyE || 0;
-                    realSaveCO2 -= measure.penaltyCO2 || 0;
-                }
-
-                const canAfford = availableBudget >= realCost;
-                const canChooseMore = chosenThisRoundCount < 3;
-                let cardClass = "bg-white card cursor-pointer border-2 border-gray-100";
-                
-                if(isTaken) cardClass = "active-card";
-                else if(!canAfford || !canChooseMore || !tState.balanceDone) cardClass = "bg-gray-50 disabled-card";
-
-                grid.innerHTML += `
-                    <div class="rounded-xl p-5 flex flex-col justify-between h-full shadow-sm ${cardClass}" onclick="buyMeasure('${measure.id}')">
-                        <div>
-                            <div class="flex justify-between items-start mb-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-1 rounded">${measure.cat}</span>
-                                ${isTaken ? '<span class="text-ecoGreen font-black text-xl">✓</span>' : ''}
-                            </div>
-                            <h3 class="font-bold text-lg leading-tight mb-4 text-gray-800">${measure.title}</h3>
-                        </div>
-                        <div class="space-y-2 mt-auto border-t pt-3">
-                            <div class="flex justify-between text-sm items-center"><span class="text-gray-600">Investition:</span> <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">${new Intl.NumberFormat('de-DE').format(realCost)} €</span></div>
-                            <div class="flex justify-between text-sm items-center"><span class="text-gray-600">Ersparnis/Jahr:</span> <div class="text-right"><span class="font-bold text-ecoGreen block">-${new Intl.NumberFormat('de-DE').format(realSaveE)} kWh</span><span class="font-bold text-gray-700 block">-${new Intl.NumberFormat('de-DE').format(realSaveCO2)} kg CO₂</span></div></div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        function buyMeasure(id) {
-            const tState = teamsState[currentRole];
-            const measure = MEASURES.find(m => m.id === id);
-            
-            if(!tState.balanceDone && globalState.round === 1) return;
-            if(tState.measuresTaken[id]) return;
-
-            let chosenThisRoundCount = 0;
-            Object.keys(tState.measuresTaken).forEach(k => {
-                if(tState.measuresTaken[k] === globalState.round) chosenThisRoundCount++;
-            });
-
-            if(chosenThisRoundCount >= 3) {
-                alert("Ihr habt in dieser Runde bereits 3 Maßnahmen gewählt!");
-                return;
-            }
-
-            let realCost = measure.cost;
-            let realSaveE = measure.saveE;
-            let realSaveCO2 = measure.saveCO2;
-            let realBonus = measure.bonus;
-            
-            if (measure.reqFlag && !tState.flags[measure.reqFlag]) {
-                realCost += measure.penaltyCost || 0;
-                realSaveE -= measure.penaltyE || 0;
-                realSaveCO2 -= measure.penaltyCO2 || 0;
-                realBonus -= measure.penaltyBonus || 0;
-                alert("Achtung! Das Konzept aus Runde 1 fehlt, daher Mehrkosten / geringere Ersparnis.");
-            }
-
-            let availableBudget = globalState.round === 3 ? 6000 : tState.budget;
-
-            if (availableBudget >= realCost) {
-                tState.history.push(JSON.stringify(tState));
-                if(globalState.round !== 3) tState.budget -= realCost;
-                if(measure.flags) tState.flags[measure.flags] = true;
-
-                tState.budget += realBonus; 
-                tState.energySaved += realSaveE;
-                tState.co2Saved += realSaveCO2;
-                tState.measuresTaken[id] = globalState.round;
-                pushTeam(currentRole);
-            } else {
-                alert("Nicht genügend Budget!");
-            }
-        }
-
-        // ==========================================================
-        // EREIGNIS- UND TEAMKARTEN (Unabhängig von Seminarfragen)
-        // ==========================================================
-        function drawBoardCard() {
-            const tState = teamsState[currentRole];
-            if (!tState.drawnCards) tState.drawnCards = {};
-            const spec = SPECIAL_FIELDS[tState.position];
-            
-            tState.history.push(JSON.stringify(tState));
-            tState.drawnCards[tState.position] = true;
-            
-            let card;
-            let title, text, effectText, colorClass, icon;
-
-            if (spec.type === 'ereignis') {
-                // Rote Ereigniskarte
-                card = EREIGNIS_KARTEN[Math.floor(Math.random() * EREIGNIS_KARTEN.length)];
-                title = "Ereignis: " + card.title;
-                text = card.text;
-                effectText = card.effect;
-                colorClass = "border-red-600";
-                icon = "⭐";
-                
-                if (card.change) tState.position += card.change;
-                if (card.budget) tState.budget += card.budget;
-
-            } else {
-                // Lila Teamkarte - Intelligente Prüfung
-                card = TEAM_KARTEN[Math.floor(Math.random() * TEAM_KARTEN.length)];
-                title = "Teamkarte: " + card.title;
-                text = card.text;
-                colorClass = "border-purple-600";
-                icon = "🤝";
-
-                if (card.isManual) {
-                    // Trainer muss auflösen
-                    effectText = "Diskutiert die Antwort. Wenn richtig: +1 Feld vor. Wenn falsch: -1 Feld zurück. Klickt anschließend auf Schließen.";
-                    // Info: Wir überlassen das Vorrücken bei manuellen Karten dem Spieler oder Admin (hier zur Vereinfachung automatisiert nach Klick)
-                    // Für einen perfekten Spielfluss addieren wir manuell nichts, der Admin kann ggf. im Dashboard korrigieren.
-                } else {
-                    // Automatische Prüfung der gekauften Maßnahmen
-                    let hasReq = false;
-                    if (card.checkReq === "C2_or_C3") {
-                        hasReq = tState.measuresTaken["C2"] || tState.measuresTaken["C3"];
-                    } else {
-                        hasReq = tState.measuresTaken[card.checkReq];
-                    }
-
-                    if (hasReq) {
-                        effectText = card.effectOk;
-                        tState.position += card.ok;
-                    } else {
-                        effectText = card.effectFail;
-                        tState.position += card.fail;
-                    }
-                }
-            }
-            
-            pushTeam(currentRole);
-
-            // Pop-Up anzeigen (lokal, wird nicht von Firebase geschlossen)
-            document.getElementById('cm-border').className = `bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center border-t-8 ${colorClass}`;
-            document.getElementById('cm-icon').innerText = icon;
-            document.getElementById('cm-title').innerText = title;
-            document.getElementById('cm-text').innerText = text;
-            document.getElementById('cm-effect').innerText = effectText;
-            document.getElementById('cardModal').classList.remove('hidden');
-        }
-
-        window.closeCardModal = function() {
-            document.getElementById('cardModal').classList.add('hidden');
-        }
-
-        // ==========================================================
-        // SEMINAR-FRAGERUNDE (Strikt Admin gesteuert)
-        // ==========================================================
-        window.adminStartQuestion = function() {
-            const qId = document.getElementById('adminQuestionSelect').value;
-            if(!qId) return;
-            globalState.activeQuestion = qId;
-            globalState.questionStartTime = Date.now();
-            globalState.questionState = 'active'; // Status: Timer läuft
-            
-            // Antworten der Teams zurücksetzen
-            Object.keys(teamsState).forEach(tk => {
-                if(!teamsState[tk].questionAnswers) teamsState[tk].questionAnswers = {};
-                teamsState[tk].questionAnswers[qId] = null;
-            });
-            pushAllTeams();
-            pushGlobal();
-        }
-
-        window.adminResolveQuestion = function() {
-            if(globalState.questionState !== 'active') return alert("Es läuft keine aktive Frage.");
-            globalState.questionState = 'resolved'; // Status: Eingefroren, Lösung anzeigen
-            
-            // Auswerten und Vorrücken
-            const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
-            if(q) {
-                Object.keys(teamsState).forEach(tk => {
-                    const ans = teamsState[tk].questionAnswers[q.id];
-                    if(ans !== null && ans !== undefined) {
-                        if(ans === q.correct) {
-                            teamsState[tk].history.push(JSON.stringify(teamsState[tk]));
-                            teamsState[tk].position += 1; // Richtig beantwortet -> +1 Feld
-                        }
-                    }
-                });
-                pushAllTeams();
-            }
-            pushGlobal();
-        }
-
-        window.adminCloseQuestion = function() {
-            globalState.questionState = 'hidden';
-            pushGlobal();
-        }
-
-        // UI Updates für das Fragen-Modal basierend auf GlobalState
-        function handleQuestionModalState() {
-            const modal = document.getElementById('questionModal');
-            
-            if (globalState.questionState === 'hidden' || !globalState.activeQuestion) {
-                modal.classList.add('hidden');
-                if(timerInterval) clearInterval(timerInterval);
-                return;
-            }
-
-            // Modal anzeigen
-            modal.classList.remove('hidden');
-            const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
-            if(!q) return;
-
-            document.getElementById('qm-title').innerText = `Seminar-Fragerunde (Runde ${q.r})`;
-            document.getElementById('qm-text').innerText = q.text;
-            
-            const optsDiv = document.getElementById('qm-options');
-            const fbDiv = document.getElementById('qm-feedback');
-
-            // TIMER LOGIK
-            if(timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(updateTimerUI, 200);
-            updateTimerUI();
-
-            // RENDER OPTIONS
-            if(currentRole === "Admin") {
-                optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Teams antworten. Korrekte Lösung für dich:</p>
-                                     <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">${q.opts[q.correct]}</div>`;
-                fbDiv.classList.add('hidden');
-            } else {
-                optsDiv.innerHTML = '';
-                const tState = teamsState[currentRole];
-                let myAnswer = tState && tState.questionAnswers ? tState.questionAnswers[q.id] : null;
-
-                q.opts.forEach((opt, index) => {
-                    let btnClass = "bg-gray-50 hover:bg-gray-100 text-gray-800 border-2 border-gray-200";
-                    let disabled = false;
-
-                    // Wenn Timer läuft, aber ich habe schon geantwortet
-                    if(myAnswer !== null && myAnswer !== undefined) {
-                        disabled = true;
-                        if(myAnswer === index) btnClass = "bg-blue-100 border-blue-500 text-blue-800 font-bold";
-                        else btnClass = "bg-gray-50 opacity-50";
-                    }
-
-                    // Wenn Admin aufgelöst hat
-                    if(globalState.questionState === 'resolved') {
-                        disabled = true;
-                        if(index === q.correct) btnClass = "bg-green-100 border-green-500 text-green-800 font-bold shadow-md";
-                        else if(myAnswer === index && index !== q.correct) btnClass = "bg-red-100 border-red-500 text-red-800";
-                        else btnClass = "bg-gray-50 opacity-50";
-                    }
-
-                    optsDiv.innerHTML += `<button ${disabled ? 'disabled' : ''} onclick="answerQuestion('${q.id}', ${index})" class="${btnClass} py-4 px-6 rounded-lg text-left transition shadow-sm text-lg">${opt}</button>`;
-                });
-
-                // Feedback Banner unten
-                if(globalState.questionState === 'resolved') {
-                    fbDiv.classList.remove('hidden');
-                    if(myAnswer === q.correct) {
-                        fbDiv.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-green-100 text-green-700 border-2 border-green-500";
-                        fbDiv.innerText = "Richtig! Ihr dürft 1 Feld vorrücken.";
-                    } else {
-                        fbDiv.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-red-100 text-red-700 border-2 border-red-500";
-                        fbDiv.innerText = "Leider falsch.";
-                    }
-                } else {
-                    fbDiv.classList.add('hidden');
-                }
-            }
-        }
-
-        function updateTimerUI() {
-            if(globalState.questionState !== 'active') return;
-            let elapsed = Math.floor((Date.now() - globalState.questionStartTime) / 1000);
-            let timeLeft = Math.max(0, 60 - elapsed);
-            
-            document.getElementById('q-timer-text').innerText = timeLeft;
-            document.getElementById('q-timer-bar').style.width = (timeLeft/60)*100 + "%";
-            
-            // Wenn Zeit abgelaufen, lokal das Klicken verhindern (Admin löst manuell auf)
-            if(timeLeft <= 0) {
-                document.getElementById('q-timer-text').innerText = "0";
-                document.getElementById('q-timer-bar').style.width = "0%";
-            }
-        }
-
-        window.answerQuestion = function(qId, selectedIndex) {
-            let elapsed = Math.floor((Date.now() - globalState.questionStartTime) / 1000);
-            if (elapsed > 60) return alert("Die Zeit ist abgelaufen!");
-            if (globalState.questionState !== 'active') return;
-
-            const tState = teamsState[currentRole];
-            if(!tState.questionAnswers) tState.questionAnswers = {};
-            
-            tState.questionAnswers[qId] = selectedIndex;
-            pushTeam(currentRole);
-            // Firebase Update triggert handleQuestionModalState und markiert den Button blau.
-        }
-
-        // ==========================================================
-        // ADMIN STEUERUNG - RUNDEN & RESET
-        // ==========================================================
-        window.adminSetRound = function(r) {
-            if(confirm(`Runde ${r} für alle starten?`)) {
-                globalState.round = r;
-                pushGlobal();
-            }
-        }
-
-        window.adminEvalRanking = function() {
-            if(!confirm("Ranking auswerten? Das Team mit der höchsten Einsparung rückt 4 Felder vor, das 2. rückt 3 vor, etc.")) return;
-            let scores = [];
-            Object.keys(teamsState).forEach(t => {
-                scores.push({ name: t, score: teamsState[t].energySaved + teamsState[t].co2Saved });
-            });
-            scores.sort((a,b) => b.score - a.score);
-            
-            let rewards = [4, 3, 2, 1];
-            scores.forEach((teamObj, index) => {
-                let tName = teamObj.name;
-                teamsState[tName].history.push(JSON.stringify(teamsState[tName]));
-                teamsState[tName].position += (rewards[index] || 0);
-            });
-            pushAllTeams();
-            alert("Ranking erfolgreich ausgewertet und Teams vorgerückt!");
-        }
-
-        window.resetGame = function() {
-            if(confirm("Spiel komplett zurücksetzen?")) {
-                globalState = { round: 1, activeQuestion: null, questionState: 'hidden', questionStartTime: 0 };
-                teamsState = {
-                    "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-                    "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-                    "Team 3": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
-                    "Team 4": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE))
-                };
-                pushGlobal();
-                pushAllTeams();
-                alert("Alles zurückgesetzt. Die Teams können sich neu einloggen.");
-            }
-        }
-
-        function renderAdminTeams() {
-            const grid = document.getElementById('adminTeamsGrid');
-            grid.innerHTML = "";
-            Object.keys(teamsState).forEach(tName => {
-                const ts = teamsState[tName];
-                // Failsafe falls undefined
-                const budgetDisp = ts.budget !== undefined ? ts.budget : 0;
-                grid.innerHTML += `
-                    <div class="bg-gray-50 border rounded-xl p-4 shadow-sm flex flex-col justify-between">
-                        <div>
-                            <h4 class="font-bold text-lg mb-2 text-gray-800">${tName}</h4>
-                            <p class="text-sm">Position: <strong class="text-blue-600">Feld ${ts.position}</strong></p>
-                            <p class="text-sm">Budget: <strong class="text-emerald-600">${new Intl.NumberFormat('de-DE').format(budgetDisp)} €</strong></p>
-                            <p class="text-sm">CO₂-Einsparung: <strong>${new Intl.NumberFormat('de-DE').format(ts.co2Saved)} kg/a</strong></p>
-                        </div>
-                        <button onclick="adminUndo('${tName}')" class="mt-4 bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold py-2 rounded text-xs transition border border-amber-300">Letzten Schritt rückgängig</button>
-                    </div>
-                `;
-            });
-        }
-
-        window.adminUndo = function(teamName) {
-            const tState = teamsState[teamName];
-            if(tState.history && tState.history.length > 0) {
-                if(confirm(`Letzten Schritt von ${teamName} rückgängig machen?`)) {
-                    teamsState[teamName] = JSON.parse(tState.history.pop());
-                    pushTeam(teamName);
-                }
-            } else {
-                alert("Keine Historie vorhanden.");
-            }
-        }
-    </script>
+    <div class="max-w-4xl w-full mx-auto px-4 -mt-6 pb-10">
+      <div class="rounded-2xl bg-white shadow-lg border border-slate-200 p-5">
+        <h2 class="font-bold text-lg mb-3">Wer spielt an diesem Bildschirm?</h2>
+        <div class="grid sm:grid-cols-2 gap-3">${teamBtns}</div>
+        <div class="border-t border-slate-200 mt-5 pt-4">
+          <h3 class="font-semibold">Spielleitung</h3>
+          <p class="text-sm text-slate-500">Kontroll-Zentrum mit Rundensteuerung, Fragerunde, Ranking und Undo.</p>
+          ${adminBox}
+        </div>
+        ${demo}
+      </div>
+    </div></div>`;
+}
+
+function joinHTML() {
+  const m = TEAM_META[state.team];
+  return box(`<div class="flex items-center gap-3 mb-4"><span class="w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-lg" style="background:${m.color};color:${m.fg}">${m.n}</span>
+      <div><h2 class="text-xl font-bold">Team ${m.n} beitreten</h2><p class="text-sm text-slate-500">Gebt euch einen Teamnamen (2–4 Personen pro Team).</p></div></div>
+    <label for="tn" class="text-sm font-medium">Teamname</label>
+    <input id="tn" data-bind="name" maxlength="30" value="${esc(state.nameInput)}" placeholder="z. B. Die Energiescouts" class="mt-1 w-full rounded-lg border-2 border-slate-200 px-3 py-2 focus:outline-none focus:border-eco-600">
+    <button data-act="join" class="mt-4 w-full py-2.5 rounded-lg bg-eco-700 text-white font-semibold hover:bg-eco-800">Team anlegen & loslegen</button>`);
+}
+
+/* ---------- Spielfeld ---------- */
+function boardHeaderHTML() {
+  const chip = (cls, txt) => `<span class="inline-flex items-center gap-1.5 text-xs text-slate-600"><span class="w-3 h-3 rounded ${cls}"></span>${txt}</span>`;
+  return `<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <h2 class="font-bold text-lg">Spielfeld</h2>
+    <div class="flex flex-wrap gap-3">${chip('bg-eco-600', 'Start / Ziel')}${chip('bg-red-500', 'Ereigniskarte')}${chip('bg-purple-500', 'Teamkarte')}</div></div>`;
+}
+function fieldRC(f) {
+  const i = f - 1, row = Math.floor(i / 10), idx = i % 10;
+  return { row: 6 - row, col: row % 2 === 0 ? idx + 1 : 10 - idx, dir: (idx === 9) ? 'up' : (row % 2 === 0 ? 'right' : 'left') };
+}
+function buildBoard() {
+  const el = document.getElementById('board'); if (!el) return;
+  let html = '<div class="grid grid-cols-10 gap-1 sm:gap-1.5">';
+  for (let f = 1; f <= FIELDS; f++) {
+    const { row, col, dir } = fieldRC(f);
+    let cls = 'bg-slate-100 text-slate-500 border-slate-200', label = '';
+    if (f === 1) { cls = 'bg-eco-600 text-white border-eco-700'; label = 'Start'; }
+    else if (f === FIELDS) { cls = 'bg-eco-800 text-white border-eco-900'; label = 'Ziel'; }
+    else if (EVENT_FIELDS.includes(f)) { cls = 'bg-red-500 text-white border-red-600'; label = 'Ereignis'; }
+    else if (TEAM_FIELDS.includes(f)) { cls = 'bg-purple-500 text-white border-purple-600'; label = 'Team'; }
+    const arrow = f === FIELDS ? '' : (dir === 'up' ? '▲' : dir === 'right' ? '▶' : '◀');
+    html += `<div data-f="${f}" class="relative h-12 sm:h-14 rounded-lg border ${cls} flex flex-col items-center justify-center select-none" style="grid-row:${row};grid-column:${col}">
+      <span class="text-sm sm:text-base font-extrabold leading-none">${f}</span>
+      ${label ? `<span class="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide opacity-90 leading-tight">${label}</span>` : ''}
+      <span class="absolute bottom-0.5 right-1 text-[8px] opacity-40">${arrow}</span></div>`;
+  }
+  html += '</div>';
+  TEAMS.forEach(id => { const m = TEAM_META[id]; html += `<div id="tok-${id}" class="token hidden" style="background:${m.color};color:${m.fg}">${m.n}</div>`; });
+  el.innerHTML = html;
+}
+function positionTokens() {
+  const board = document.getElementById('board'); if (!board) return;
+  TEAMS.forEach((id, i) => {
+    const tok = document.getElementById('tok-' + id); if (!tok) return;
+    const t = state.teams[id];
+    if (!t) { tok.classList.add('hidden'); return; }
+    tok.classList.remove('hidden');
+    tok.classList.toggle('me', state.role === 'team' && state.team === id);
+    const fe = board.querySelector(`[data-f="${t.pos}"]`); if (!fe) return;
+    const size = tok.offsetWidth || 22;
+    const off = [[-1, -1], [1, -1], [-1, 1], [1, 1]][i];
+    const d = Math.min(fe.offsetWidth, fe.offsetHeight) * 0.26;
+    const x = fe.offsetLeft + fe.offsetWidth / 2 + off[0] * d - size / 2;
+    const y = fe.offsetTop + fe.offsetHeight / 2 + off[1] * d - size / 2;
+    const tr = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    if (tok.style.transform !== tr) tok.style.transform = tr;
+    tok.title = `${teamName(id)} – Feld ${t.pos}`;
+  });
+}
+let boardObserver = null;
+function observeBoard() {
+  const b = document.getElementById('board'); if (!b || typeof ResizeObserver === 'undefined') return;
+  if (boardObserver) boardObserver.disconnect();
+  boardObserver = new ResizeObserver(() => positionTokens()); boardObserver.observe(b);
+}
+
+/* ---------- Seitenleiste: Gebäudeplan + Kartenstapel ---------- */
+function sideTeamHTML(t) {
+  const zc = {};
+  Object.keys(t.impl).forEach(id => (MBY[id].zones || []).forEach(z => { zc[z] = (zc[z] || 0) + 1; }));
+  const evBadge = { aufzug: t.usedE.includes(4) ? '<span class="block text-[10px] text-eco-700 font-semibold">Ereignis: −500 kWh</span>' : '',
+                    klima: t.usedE.includes(6) ? '<span class="block text-[10px] text-red-600 font-semibold">Klimaanlage: +4.000 kWh</span>' : '' };
+  const zones = ZONES.map(([k, l]) => {
+    const n = zc[k] || 0;
+    return `<div class="rounded-lg border p-2 min-h-[64px] ${n ? 'bg-eco-100 border-eco-300' : 'bg-slate-50 border-slate-200'}">
+      <div class="text-[11px] font-semibold leading-tight ${n ? 'text-eco-900' : 'text-slate-500'}">${l}</div>
+      <div class="flex gap-1 mt-1">${Array.from({ length: n }, () => '<span class="w-2.5 h-2.5 rounded-full bg-eco-600"></span>').join('')}</div>
+      ${evBadge[k] || ''}</div>`;
+  }).join('');
+  const c = t.cards[0];
+  const stack = (type, label, cls, left) => {
+    const ready = c && c.st === 'ready' && c.type === type;
+    return `<div class="rounded-xl ${cls} text-white p-3 relative ${ready ? 'pulse-ring' : ''}">
+      <div class="absolute inset-0 translate-x-1 translate-y-1 rounded-xl ${cls} opacity-40 -z-10"></div>
+      <div class="text-xs font-semibold uppercase tracking-wide opacity-90">${label}</div>
+      <div class="text-2xl font-extrabold">${left}</div><div class="text-[11px] opacity-80">Karten im Stapel</div>
+      ${ready ? `<button data-act="draw" class="mt-2 w-full py-1.5 rounded-lg bg-white text-slate-900 text-sm font-bold hover:bg-slate-100">Karte ziehen</button>` : ''}</div>`;
+  };
+  return box(`<h2 class="font-bold text-lg mb-1">Verwaltungsgebäude</h2>
+    <p class="text-xs text-slate-500 mb-3">Grün markierte Bereiche habt ihr bereits verbessert.</p>
+    <div class="grid grid-cols-3 gap-1.5">${zones}</div>
+    <div class="grid grid-cols-2 gap-3 mt-4 isolate">
+      ${stack('E', 'Ereigniskarten', 'bg-red-500', EVENTS.length - t.usedE.length)}
+      ${stack('T', 'Teamkarten', 'bg-purple-600', TEAMCARDS.length - t.usedT.length)}
+    </div>`, 'h-full');
+}
+function sideAdminHTML() {
+  const rows = TEAMS.map(id => {
+    const t = state.teams[id], m = TEAM_META[id];
+    if (!t) return `<li class="flex items-center gap-2 text-slate-400"><span class="w-3 h-3 rounded-full" style="background:${m.color}"></span>Team ${m.n} – nicht beigetreten</li>`;
+    const pend = t.cards[0] ? `<span class="ml-auto text-[11px] px-2 py-0.5 rounded-full ${t.cards[0].type === 'E' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}">${t.cards[0].type === 'E' ? 'Ereigniskarte' : 'Teamkarte'}${t.cards[0].st === 'await' ? ' · Bewertung!' : ''}</span>` : '';
+    return `<li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full shrink-0" style="background:${m.color}"></span><span class="font-semibold truncate">${esc(teamName(id))}</span><span class="text-slate-500 text-sm whitespace-nowrap">Feld ${t.pos}</span>${pend}</li>`;
+  }).join('');
+  return box(`<h2 class="font-bold text-lg mb-3">Positionen</h2><ul class="space-y-2">${rows}</ul>
+    <div class="mt-4 text-xs text-slate-500 space-y-1">
+      <p>Ereignisfelder: ${EVENT_FIELDS.join(', ')}</p><p>Teamkartenfelder: ${TEAM_FIELDS.join(', ')}</p>
+      <p>Karten werden nur ausgelöst, wenn eine Figur durch Fragerunde, Energiebilanz oder Ranking auf dem Feld landet (nicht durch Kartenbewegungen oder Korrekturen).</p>
+    </div>`, 'h-full');
+}
+
+/* ---------- Kartenpanel (Ereignis/Team) ---------- */
+function cardPanelHTML(t) {
+  const c = t.cards[0]; if (!c) return '';
+  const isE = c.type === 'E';
+  const color = isE ? 'border-red-400 bg-red-50' : 'border-purple-400 bg-purple-50';
+  const title = isE ? 'Ereigniskarte' : 'Teamkarte';
+  const more = t.cards.length > 1 ? `<p class="text-xs text-slate-500 mt-2">Danach wartet noch ${t.cards.length - 1} weitere Karte.</p>` : '';
+  if (c.st === 'ready') {
+    return `<div class="rounded-2xl border-2 ${color} p-4 sm:p-5 flex flex-wrap items-center gap-4 fade-in">
+      <div class="flex-1 min-w-[220px]"><div class="text-xs font-bold uppercase tracking-wide ${isE ? 'text-red-700' : 'text-purple-700'}">Feld ${c.field}</div>
+      <div class="text-lg font-bold">Ihr seid auf einem ${isE ? 'Ereignisfeld' : 'Teamkartenfeld'} gelandet!</div></div>
+      <button data-act="draw" class="px-5 py-3 rounded-xl ${isE ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'} text-white font-bold text-lg shadow">${title} ziehen</button>${more}</div>`;
+  }
+  let body = '';
+  if (isE) {
+    const e = EVENTS.find(x => x.id === c.id);
+    body = `<p class="text-slate-700">${esc(e.text)}</p><p class="mt-2 font-bold">${esc(e.effect)}</p>`;
+  } else {
+    const tc = TEAMCARDS.find(x => x.id === c.id);
+    body = `<p class="text-lg font-semibold">${esc(tc.q)}</p><p class="text-sm text-slate-600 mt-1">${esc(tc.rule)}</p>`;
+    if (c.st === 'await') body += `<div class="mt-3 rounded-lg bg-white border border-purple-200 p-3 text-sm">💬 Beantwortet die Frage mündlich gegenüber der Spielleitung. Die Spielleitung bewertet eure Antwort – danach bewegt sich eure Figur automatisch.</div>`;
+    else {
+      const res = tc.type === 'auto' ? `Antwort laut eurem Spielstand: <b>${c.ok ? 'Ja' : 'Nein'}</b>` : `Bewertung der Spielleitung: <b>${c.ok ? 'richtig' : 'falsch'}</b>`;
+      body += `<div class="mt-3 rounded-lg ${c.ok ? 'bg-eco-100 text-eco-900' : 'bg-red-100 text-red-800'} p-3 text-sm">${res} → ${c.ok ? '+' + tc.yes : tc.no} ${Math.abs(c.ok ? tc.yes : tc.no) === 1 ? 'Feld' : 'Felder'}${tc.sol ? `<br>Lösung: ${esc(tc.sol)}` : ''}</div>`;
+    }
+  }
+  return `<div class="rounded-2xl border-2 ${color} p-4 sm:p-5 fade-in">
+    <div class="text-xs font-bold uppercase tracking-wide ${isE ? 'text-red-700' : 'text-purple-700'}">${title} ${c.id} · Feld ${c.field}</div>
+    <div class="mt-1">${body}</div>
+    ${c.st === 'done' ? `<button data-act="ack" class="mt-4 px-5 py-2 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-900">Verstanden</button>` : ''}${more}</div>`;
+}
+
+/* ---------- Energiebilanz ---------- */
+function bilanzHTML(t) {
+  const g = G();
+  if (t.bilanz) return '';
+  if (g.round < 1) return box(`<h2 class="text-lg font-bold">Willkommen, ${esc(t.name)}!</h2>
+    <p class="text-slate-600 mt-1">Die Spielleitung startet gleich die erste Runde. Lest euch bis dahin das Szenario durch.</p>
+    <div class="mt-3 rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700 leading-relaxed"><b>Szenario:</b> ${esc(SCENARIO)}</div>`);
+  const inp = (k, l) => `<div><label for="bf-${k}" class="text-sm font-semibold">${l} (kWh/a)</label>
+    <input id="bf-${k}" data-bind="bf-${k}" inputmode="numeric" value="${esc(state.bf[k])}" placeholder="0"
+      class="mt-1 w-full rounded-lg border-2 px-3 py-2 text-lg font-semibold focus:outline-none ${state.bfErr[k] ? 'border-red-500 bg-red-50' : 'border-slate-200 focus:border-eco-600'}">
+    ${state.bfErr[k] ? '<p class="text-xs text-red-600 mt-1">Dieser Wert stimmt noch nicht.</p>' : ''}</div>`;
+  return box(`<div class="flex flex-wrap items-start justify-between gap-2"><div>
+      <div class="text-xs font-bold uppercase tracking-wide text-eco-700">Runde 1 · Pflichtaufgabe</div>
+      <h2 class="text-xl font-bold">Energiebilanz erstellen</h2>
+      <p class="text-sm text-slate-600 mt-1 max-w-2xl">Tragt den Jahresverbrauch des Verwaltungsgebäudes inkl. Fuhrpark je Energieträger ein (Werte aus den Spielunterlagen der Spielleitung). Sind alle Werte korrekt, berechnet das Dashboard die CO₂-Bilanz automatisch, ihr erhaltet 100.000 € Startbudget und rückt 3 Felder vor.</p></div>
+      <span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">🔒 Dashboard gesperrt</span></div>
+    <div class="grid sm:grid-cols-3 gap-3 mt-4">${inp('strom', 'Strom')}${inp('gas', 'Erdgas')}${inp('diesel', 'Diesel')}</div>
+    <button data-act="bilanz" class="mt-4 px-5 py-2.5 rounded-lg bg-eco-700 text-white font-semibold hover:bg-eco-800">Energiebilanz prüfen</button>
+    <details class="mt-4 text-sm text-slate-600"><summary class="cursor-pointer font-semibold">Szenario anzeigen</summary><p class="mt-2 leading-relaxed">${esc(SCENARIO)}</p></details>`, 'border-eco-300');
+}
+
+/* ---------- Dashboard ---------- */
+function kpi(label, value, sub, cls) {
+  return `<div class="rounded-xl bg-slate-50 border border-slate-200 p-3"><div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">${label}</div>
+    <div class="text-xl font-extrabold mt-0.5 ${cls || ''}">${value}</div>${sub ? `<div class="text-xs text-slate-500 mt-0.5">${sub}</div>` : ''}</div>`;
+}
+function dashHTML(t) {
+  const g = G(), r = g.round;
+  if (!t.bilanz) return box(`<h2 class="text-lg font-bold mb-1">Dashboard</h2><p class="text-slate-600 text-sm">🔒 Wird freigeschaltet, sobald eure Energiebilanz korrekt ist.</p>`, 'h-full');
+  const kwh = t.cons.strom + t.cons.gas + t.cons.diesel;
+  const savK = START_KWH - kwh, savC = START_CO2 - t.co2;
+  const r3 = r === 3 ? kpi('IKT-Sonderbudget', eur(R3_BUDGET - ((t.rs[3] && t.rs[3].cost) || 0)), 'nur für Runde 3', 'text-sky-700') : '';
+  const bilRows = Object.keys(START).map(k => `<tr class="border-t border-slate-100"><td class="py-1.5">${CARRIER[k]}</td><td class="text-right">${fmt(START[k])}</td><td class="text-right text-slate-500">${EF[k].toFixed(2).replace('.', ',')}</td><td class="text-right">${fmt(START[k] * EF[k])}</td><td class="text-right font-semibold">${fmt(t.cons[k])}</td></tr>`).join('');
+  const roundBlocks = [1, 2, 3, 4].filter(x => t.chosen[x]).map(x => {
+    const cur = x === r;
+    const rows = t.chosen[x].map(id => { const i = t.impl[id] || {}; return `<tr class="border-t border-slate-100"><td class="py-1 pr-2 font-semibold">${id}</td><td class="pr-2">${esc(MBY[id].title)}</td><td class="text-right whitespace-nowrap">${eur(i.cost)}</td><td class="text-right whitespace-nowrap">${fmt(i.kwh)}</td><td class="text-right whitespace-nowrap">${fmt(i.co2)}</td><td class="text-right whitespace-nowrap">+${eur(i.bonus)}</td></tr>`; }).join('');
+    const s = t.rs[x];
+    return `<div class="rounded-xl border ${cur ? 'border-eco-400 bg-eco-50' : 'border-slate-200 bg-slate-50 opacity-80'} p-3">
+      <div class="flex justify-between items-center mb-1"><b>Runde ${x} · ${ROUNDS[x].title}</b><span class="text-[11px] px-2 py-0.5 rounded-full ${cur ? 'bg-eco-600 text-white' : 'bg-slate-400 text-white'}">${cur ? 'diese Runde' : 'aktiviert'}</span></div>
+      <div class="overflow-x-auto"><table class="w-full text-xs"><thead class="text-slate-500"><tr><th class="text-left">Nr.</th><th class="text-left">Maßnahme</th><th class="text-right">Kosten</th><th class="text-right">kWh/a</th><th class="text-right">kg CO₂/a</th><th class="text-right">Budget</th></tr></thead>
+      <tbody>${rows}<tr class="border-t-2 border-slate-300 font-bold"><td></td><td>Summe${x === 3 ? ' (Kosten aus IKT-Sonderbudget)' : ''}</td><td class="text-right">${eur(s.cost)}</td><td class="text-right">${fmt(s.kwh)}</td><td class="text-right">${fmt(s.co2)}</td><td class="text-right">+${eur(s.bonus)}</td></tr></tbody></table></div></div>`;
+  }).join('');
+  const log = t.log.slice(-5).reverse().map(l => `<li class="truncate">• ${esc(l.m)}</li>`).join('');
+  return box(`<div class="flex items-center justify-between mb-3"><h2 class="text-lg font-bold">Dashboard · ${esc(t.name)}</h2><span class="text-sm text-slate-500">Feld ${t.pos} / ${FIELDS}</span></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+      ${kpi('Budget', eur(t.budget), 'Investitionsbudget', t.budget < 0 ? 'text-red-600' : 'text-eco-800')}
+      ${r3}
+      ${kpi('Energieverbrauch', fmt(kwh) + ' kWh', `Strom ${fmt(t.cons.strom)} · Gas ${fmt(t.cons.gas)} · Diesel ${fmt(t.cons.diesel)}`)}
+      ${kpi('CO₂-Emissionen', fmt(t.co2) + ' kg', `Start: ${fmt(START_CO2)} kg`)}
+      ${kpi('Einsparung gesamt', fmt(savK) + ' kWh', `${fmt(savC)} kg CO₂`, 'text-eco-700')}
+    </div>
+    <details class="mt-4" open><summary class="cursor-pointer font-semibold text-sm">Energie- & CO₂-Bilanz</summary>
+      <div class="overflow-x-auto mt-2"><table class="w-full text-sm"><thead class="text-xs text-slate-500"><tr><th class="text-left">Energieträger</th><th class="text-right">Start kWh/a</th><th class="text-right">kg CO₂e/kWh</th><th class="text-right">Start kg CO₂</th><th class="text-right">Aktuell kWh/a</th></tr></thead>
+      <tbody>${bilRows}<tr class="border-t-2 border-slate-300 font-bold"><td class="py-1.5">Summe</td><td class="text-right">${fmt(START_KWH)}</td><td></td><td class="text-right">${fmt(START_CO2)}</td><td class="text-right">${fmt(kwh)}</td></tr></tbody></table></div>
+      <p class="text-[11px] text-slate-500 mt-1">Aktuelle CO₂-Emissionen = Start minus CO₂-Einsparungen laut Maßnahmenkarten (plus/minus Ereignisse).</p></details>
+    ${roundBlocks ? `<div class="mt-4 space-y-3">${roundBlocks}</div>` : ''}
+    ${log ? `<div class="mt-4"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Verlauf</div><ul class="text-xs text-slate-600 space-y-0.5">${log}</ul></div>` : ''}`, 'h-full');
+}
+
+/* ---------- Ranking (alle Teams sichtbar) ---------- */
+function rankHTML() {
+  const g = G(); const r = Math.min(Math.max(g.round, 1), 4);
+  const ids = TEAMS.filter(id => state.teams[id]).sort((a, b) => state.teams[b].pos - state.teams[a].pos);
+  const rows = ids.map(id => {
+    const t = state.teams[id], m = TEAM_META[id], s = t.rs[r];
+    const totK = START_KWH - (t.cons.strom + t.cons.gas + t.cons.diesel), totC = START_CO2 - t.co2;
+    return `<tr class="border-t border-slate-100 ${state.team === id ? 'bg-eco-50' : ''}">
+      <td class="py-2 pr-2"><span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:${m.color}"></span><b>${m.n}</b></span><div class="text-[11px] text-slate-500 truncate max-w-[90px]">${esc(t.name)}</div></td>
+      <td class="text-center font-bold">${t.pos}</td>
+      <td class="text-right text-xs">${s ? fmt(s.kwh) + ' kWh<br>' + fmt(s.co2) + ' kg' : '<span class="text-slate-400">offen</span>'}</td>
+      <td class="text-right text-xs">${fmt(totK)} kWh<br>${fmt(totC)} kg</td></tr>`;
+  }).join('');
+  const done = [4, 3, 2, 1].find(x => g.rankings[x]);
+  let last = '';
+  if (done) {
+    let list = []; try { list = JSON.parse(g.rankings[done]); } catch (e) { list = []; }
+    last = `<div class="mt-4"><div class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Auswertung Runde ${done}</div>
+      <ol class="space-y-1 text-sm">${list.map(a => `<li class="flex justify-between gap-2"><span>${a.place}. ${esc(teamName(a.id))}</span><span class="font-semibold text-eco-700 whitespace-nowrap">+${a.fields} Felder</span></li>`).join('')}</ol></div>`;
+  }
+  return box(`<h2 class="text-lg font-bold mb-2">Ranking</h2>
+    <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-[11px] text-slate-500 uppercase"><tr><th class="text-left">Team</th><th>Feld</th><th class="text-right">Runde ${r}</th><th class="text-right">Gesamt</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="text-slate-400 py-2">Noch keine Teams.</td></tr>'}</tbody></table></div>
+    <p class="text-[11px] text-slate-500 mt-2">Rundenwertung: Platz im Energie-Ranking + Platz im CO₂-Ranking. Platz 1 rückt 4 Felder vor, Platz 2 drei, Platz 3 zwei, Platz 4 eins.</p>${last}`, 'h-full');
+}
+
+/* ---------- Maßnahmenkarten ---------- */
+function backLines(m) {
+  const l = (m.lines || []).slice();
+  if (!m.noAuto) {
+    if (m.co2) l.push(`Einsparung CO₂: ${fmt(m.co2)} kg/a${m.co2Note || ''}`);
+    if (m.bonus) l.push(`${m.bonusLabel || 'Erspieltes Budget'}: ${eur(m.bonus)}`);
+  }
+  return l;
+}
+function cardHTML(id, mode, t) {
+  const displayCost = t ? effective(m, t, state.sel || []).cost : m.cost;
+  const modes = {
+    select: 'bg-white border-slate-200 hover:border-eco-500 hover:shadow-md cursor-pointer',
+    selected: 'bg-eco-50 border-eco-600 ring-2 ring-eco-500 shadow-md cursor-pointer',
+    blocked: 'bg-white border-slate-200 opacity-50 cursor-not-allowed',
+    locked: 'bg-white border-slate-200',
+    waiting: 'bg-slate-100 border-slate-200 grayscale opacity-60',
+    done: 'bg-white border-eco-600 shadow-sm',
+    active: 'bg-slate-50 border-slate-300 grayscale opacity-75',
+    del: 'bg-white border-slate-200 hover:border-red-400 cursor-pointer',
+    delsel: 'bg-red-50 border-red-500 ring-2 ring-red-400 cursor-pointer'
+  };
+  const badge = { selected: ['✓ Gewählt', 'bg-eco-600 text-white'], done: ['✓ Umgesetzt', 'bg-eco-600 text-white'], active: ['Aktiviert', 'bg-slate-500 text-white'],
+                  delsel: ['Wird abgegeben', 'bg-red-600 text-white'], waiting: ['Später wählbar', 'bg-slate-400 text-white'] }[mode];
+  const act = (mode === 'select' || mode === 'selected') ? 'sel-toggle' : (mode === 'del' || mode === 'delsel') ? 'del-toggle' : null;
+  const tag = (act || mode === 'blocked') ? 'button' : 'div';
+  const attrs = act ? `type="button" data-act="${act}" data-id="${id}" aria-pressed="${mode === 'selected' || mode === 'delsel'}"` : (mode === 'blocked' ? 'type="button" disabled' : '');
+  const extra = (impl && impl.cost !== m.cost)
+    ? ` <span class="text-red-600 font-semibold">(+${eur(impl.cost - m.cost)})</span>`
+    : (displayCost !== m.cost ? ` <span class="text-red-600 font-semibold">(bedingt)</span>` : '');
+  let html = `<${tag} ${attrs} class="relative w-full rounded-xl border-2 overflow-hidden flex flex-col text-left transition focus:outline-none focus-visible:ring-4 focus-visible:ring-eco-400 ${modes[mode]}">
+    <div class="${s.head} text-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide flex justify-between gap-2"><span class="truncate">${s.label}</span><span class="font-extrabold">${id}</span></div>
+    <div class="p-3 flex-1 flex flex-col gap-2">
+      ${badge ? `<span class="self-start text-[10px] font-bold px-2 py-0.5 rounded-full ${badge[1]}">${badge[0]}</span>` : ''}
+      <div class="font-semibold leading-snug">${esc(m.title)}</div>
+      <div class="text-sm text-slate-600">Kosten: <b>${eur(displayCost)}</b>${extra}</div>`;
+  if (full) {
+    html += `<div class="border-t border-dashed border-slate-300 pt-2 text-xs text-slate-600 leading-relaxed">${esc(m.desc)}</div>
+      <ul class="text-xs space-y-0.5 text-slate-700">${backLines(m).map(l => `<li>• ${esc(l)}</li>`).join('')}</ul>`;
+    if (impl) html += `<div class="mt-auto rounded-lg ${s.soft} px-2 py-1.5 text-xs"><b>Bei euch angerechnet:</b> ${fmt(impl.kwh)} kWh · ${fmt(impl.co2)} kg CO₂ · +${eur(impl.bonus)} Budget${impl.note ? `<br><span class="text-red-700">${esc(impl.note)}</span>` : ''}</div>`;
+  }
+  html += `</div></${tag}>`;
+  return html;
+}
+function waitingCards(t, r) {
+  if (r === 1 && t.chosen[1]) return ROUNDS[1].own.filter(id => !t.chosen[1].includes(id));
+  if ((r === 2 || r === 3) && t.chosen[2] && t.delDone) return leftover2(t).filter(id => !t.deleted.includes(id));
+  if (r >= 4 && t.chosen[4]) return roundPool(t, 4).filter(id => !t.chosen[4].includes(id));
+  return [];
+}
+function sectionHead(title, sub) { return `<div class="mb-3"><h2 class="text-lg font-bold">${title}</h2>${sub ? `<p class="text-sm text-slate-500">${sub}</p>` : ''}</div>`; }
+
+function selectionHTML(t, r, pool) {
+  const R = ROUNDS[r]; const sel = state.sel.filter(id => pool.includes(id));
+  const avail = r === 3 ? R3_BUDGET : t.budget;
+  const totalCost = ids => ids.reduce((s, id) => s + effective(MBY[id], t, ids).cost, 0);
+  const cost = totalCost(sel); const rest = avail - cost;
+  const err = validateSel(t, r, sel);
+  const checks = [[sel.length >= R.min && sel.length <= R.pick, R.min === R.pick ? `Genau ${R.pick} Karten (${sel.length}/${R.pick})` : `1 bis ${R.pick} Karten (${sel.length}/${R.pick})`]]
+    .concat(R.req.map(([c, l]) => [sel.some(id => MBY[id].cat === c), `Mind. 1 × ${l}`]))
+    .concat([[cost <= avail, `Kosten ${eur(cost)} von ${eur(avail)}${r === 3 ? ' IKT-Sonderbudget' : ''}`]]);
+  const cards = pool.map(id => {
+    const on = sel.includes(id);
+    const candidate = sel.concat(id);
+    const blocked = !on && (sel.length >= R.pick || totalCost(candidate) > avail);
+    return cardHTML(id, on ? 'selected' : (blocked ? 'blocked' : 'select'), t);
+  });
+  const sub = {
+    1: 'Wählt 3 von 6 Karten. Ihr seht nur die Vorderseite – die Rückseite wird erst nach der Umsetzung sichtbar.',
+    2: 'Wählt 3 von 10 Karten (7 neue + 3 aus Runde 1). Pflicht: mindestens 1 × Fuhrpark und 1 × Beleuchtung.',
+    3: `Für diese Runde gibt es ein IKT-Sonderbudget von ${eur(R3_BUDGET)} (nur für die Umsetzung). Wählt genau 3 der 4 verfügbaren Karten.`,
+    4: 'Wählt 3 von 13 Karten (9 neue + 4 aus Runde 2). Pflicht: mindestens 1 × Heizung und 1 × Wärmedämmung.'
+  }[r];
+  return box(`${sectionHead(`Runde ${r}: Maßnahmen auswählen`, sub)}
+    <div class="sticky top-0 z-20 -mx-4 sm:-mx-5 px-4 sm:px-5 py-2 mb-3 bg-white/95 backdrop-blur border-b border-slate-100 flex flex-wrap items-center gap-2">
+      ${checks.map(([ok, l]) => `<span class="text-xs font-semibold px-2 py-1 rounded-full ${ok ? 'bg-eco-100 text-eco-800' : 'bg-slate-100 text-slate-500'}">${ok ? '✓' : '○'} ${l}</span>`).join('')}
+      <button data-act="sel-submit" ${err ? 'disabled' : ''} class="ml-auto px-4 py-2 rounded-lg font-semibold ${err ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-eco-700 text-white hover:bg-eco-800'}">Maßnahmen verbindlich umsetzen</button>
+    </div>
+    ${grid(cards)}`);
+}
+function deletionHTML(t) {
+  const lo = leftover2(t); const need = Math.max(0, lo.length - 4);
+  const ds = state.delSel.filter(id => lo.includes(id));
+  return box(`${sectionHead('Karten abgeben', `Von den ${lo.length} übrig gebliebenen Karten müsst ihr ${need} abgeben (sie sind danach gelöscht). Die anderen ${lo.length - need} nehmt ihr in Runde 4 mit.`)}
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span class="text-xs font-semibold px-2 py-1 rounded-full ${ds.length === need ? 'bg-eco-100 text-eco-800' : 'bg-slate-100 text-slate-500'}">${ds.length}/${need} ausgewählt</span>
+      <button data-act="del-submit" ${ds.length !== need ? 'disabled' : ''} class="ml-auto px-4 py-2 rounded-lg font-semibold ${ds.length !== need ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}">Ausgewählte Karten abgeben</button>
+    </div>${grid(lo.map(id => cardHTML(id, ds.includes(id) ? 'delsel' : 'del', t)))}`, 'border-red-200');
+}
+function measuresHTML(t) {
+  const g = G(), r = g.round;
+  if (r < 1) return '';
+  if (!t.bilanz) return box(`${sectionHead('Maßnahmenkarten')}<p class="text-slate-600 text-sm">Erstellt zuerst die Energiebilanz – danach werden Dashboard und Maßnahmenkarten freigeschaltet.</p>`);
+  let out = '';
+  if (r <= 4) {
+    if (t.chosen[r]) {
+      out += box(sectionHead(`Runde ${r}: Eure umgesetzten Maßnahmen`, 'Jetzt dürft ihr die Rückseiten lesen. Wartet auf die Auswertung durch die Spielleitung.') + grid(t.chosen[r].map(id => cardHTML(id, 'done', t))), 'border-eco-300');
+      if (r === 2 && !t.delDone) out += deletionHTML(t);
+    } else if (r === 4 && t.chosen[2] && !t.delDone) {
+      out += deletionHTML(t);
+    } else {
+      const pool = roundPool(t, r);
+      if (!g.open) out += box(sectionHead(`Runde ${r}: Maßnahmenwahl`, '⏳ Die Spielleitung hat die Maßnahmenwahl noch nicht freigegeben. Die Vorderseiten könnt ihr euch schon ansehen.') + grid(pool.map(id => cardHTML(id, 'locked', t))));
+      else out += selectionHTML(t, r, pool);
+    }
+  }
+  const waiting = waitingCards(t, r);
+  if (waiting.length) out += box(sectionHead('Nicht gewählte Karten', 'Nur Vorderseite, ausgegraut, bis sie in einer späteren Runde wieder wählbar sind.') + grid(waiting.map(id => cardHTML(id, 'waiting', t))));
+  const prev = [1, 2, 3, 4].filter(x => t.chosen[x] && x !== r);
+  if (prev.length) out += box(sectionHead('Bereits aktivierte Maßnahmen') + prev.map(x => `<h3 class="text-sm font-semibold text-slate-500 mt-3 mb-2">Runde ${x} · ${ROUNDS[x].title}</h3>` + grid(t.chosen[x].map(id => cardHTML(id, 'active', t)))).join(''));
+  return out;
+}
+
+/* ---------- Fragerunde: Modal (Team) ---------- */
+function modalHTML(t) {
+  const q = G().q;
+  if (!q || q.status === 'closed' || state.dismissed[q.id]) return '';
+  const it = QUESTIONS[q.r].items[q.i];
+  const my = t.answer && t.answer.qid === q.id ? t.answer.c : null;
+  const revealed = q.status === 'revealed';
+  const expired = isExpired(q);
+  const L = ['A', 'B', 'C'];
+  const opts = it.a.map((a, i) => {
+    let cls = 'bg-white border-slate-200 hover:border-eco-500 hover:bg-eco-50';
+    if (revealed) cls = i === it.c ? 'bg-eco-100 border-eco-600' : (my === i ? 'bg-red-50 border-red-500' : 'bg-white border-slate-200 opacity-60');
+    else if (my === i) cls = 'bg-eco-50 border-eco-600 ring-2 ring-eco-500';
+    else if (my !== null || expired) cls = 'bg-white border-slate-200 opacity-50';
+    const dis = revealed || my !== null || expired;
+    return `<button data-act="answer" data-c="${i}" ${dis ? 'disabled' : ''} class="w-full flex items-start gap-3 text-left p-3 sm:p-4 rounded-xl border-2 transition ${cls} ${dis ? 'cursor-default' : 'cursor-pointer'} focus:outline-none focus-visible:ring-4 focus-visible:ring-eco-400">
+      <span class="w-8 h-8 shrink-0 rounded-lg bg-slate-800 text-white font-bold flex items-center justify-center">${L[i]}</span><span class="pt-1 font-medium">${esc(a)}</span>
+      ${revealed && i === it.c ? '<span class="ml-auto text-eco-700 font-bold pt-1">✓ richtig</span>' : ''}</button>`;
+  }).join('');
+  let status = '';
+  if (revealed) {
+    const res = q.results[state.team];
+    status = res === true ? `<div class="rounded-xl bg-eco-600 text-white p-3 font-bold">Richtig! Ihr rückt 1 Feld vor.</div>`
+           : res === false ? `<div class="rounded-xl bg-red-600 text-white p-3 font-bold">Leider falsch – richtig ist ${L[it.c]}.</div>`
+           : `<div class="rounded-xl bg-slate-200 p-3 font-semibold">Keine Antwort abgegeben – richtig ist ${L[it.c]}.</div>`;
+  } else if (my !== null) status = `<div class="rounded-xl bg-eco-50 border border-eco-200 p-3 text-eco-900 font-semibold">Antwort ${L[my]} ist eingeloggt – wartet auf die Auflösung durch die Spielleitung.</div>`;
+  else if (expired) status = `<div class="rounded-xl bg-slate-100 p-3 font-semibold text-slate-700">⏱ Zeit abgelaufen – wartet auf die Auflösung.</div>`;
+  return `<div class="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-3" role="dialog" aria-modal="true" aria-labelledby="q-title">
+    <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden fade-in">
+      <div class="bg-eco-900 text-white px-5 py-3 flex items-center gap-3">
+        <div><div class="text-xs uppercase tracking-wide text-eco-300 font-semibold">Fragerunde ${q.r} · ${esc(QUESTIONS[q.r].title)}</div><div class="font-bold">Frage ${q.i + 1} von 6</div></div>
+        <div class="ml-auto text-2xl font-extrabold tabular-nums" data-timer>${revealed ? 'aufgelöst' : fmtTime(remaining(q))}</div>
+      </div>
+      <div class="h-1.5 bg-slate-200"><div data-timerbar class="h-full bg-yellow-400 transition-[width] duration-300" style="width:${revealed ? 0 : remaining(q) / QUESTION_SECONDS * 100}%"></div></div>
+      <div class="p-5 space-y-3">
+        <h3 id="q-title" class="text-lg sm:text-xl font-bold leading-snug">${esc(it.q)}</h3>
+        <div class="space-y-2">${opts}</div>
+        ${status}
+        ${revealed ? `<button data-act="q-dismiss" class="w-full py-2.5 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-900">Fenster schließen</button>` : ''}
+      </div></div></div>`;
+}
+
+/* ---------- Spielende ---------- */
+function endHTML() {
+  const g = G(); if (g.round < 5) return '';
+  const ids = TEAMS.filter(id => state.teams[id]); if (!ids.length) return '';
+  const max = Math.max.apply(null, ids.map(id => state.teams[id].pos));
+  const win = ids.filter(id => state.teams[id].pos === max);
+  return `<div class="rounded-2xl bg-eco-700 text-white p-5 flex flex-wrap items-center gap-4 fade-in">
+    <div class="text-4xl" aria-hidden="true">🏆</div>
+    <div><div class="text-xs uppercase tracking-widest text-eco-200 font-semibold">Spielende</div>
+    <div class="text-2xl font-extrabold">Sieger: ${win.map(id => esc(teamName(id))).join(' & ')}</div>
+    <div class="text-eco-100">Feld ${max} von ${FIELDS}${max >= FIELDS ? ' – Ziel erreicht!' : ''}</div></div></div>`;
+}
+
+/* ---------- Admin: Rundensteuerung ---------- */
+function adminRoundHTML() {
+  const g = G(), r = g.round;
+  const btn = (x, l) => `<button data-act="round" data-r="${x}" class="px-3 py-2 rounded-lg text-sm font-semibold border ${x === r ? 'bg-eco-700 text-white border-eco-700' : 'bg-white border-slate-300 hover:bg-slate-50'}">${l}</button>`;
+  const rows = TEAMS.filter(id => state.teams[id]).map(id => {
+    const t = state.teams[id]; const ch = r >= 1 && r <= 4 ? t.chosen[r] : null;
+    const ok = v => v ? '<span class="text-eco-700 font-bold">✓</span>' : '<span class="text-slate-400">–</span>';
+    return `<tr class="border-t border-slate-100"><td class="py-1.5 pr-2 font-semibold">${esc(teamName(id))}</td><td class="text-center">${ok(t.bilanz)}</td>
+      <td class="text-center text-xs">${ch ? '<span class="text-eco-700 font-semibold">' + ch.join(', ') + '</span>' : ok(false)}</td>
+      <td class="text-center">${t.chosen[2] ? ok(t.delDone) : '<span class="text-slate-300">·</span>'}</td></tr>`;
+  }).join('');
+  return box(`<h3 class="font-bold text-lg mb-3">Spielsteuerung</h3>
+    <div class="flex flex-wrap gap-2">${btn(0, 'Lobby')}${btn(1, 'Runde 1')}${btn(2, 'Runde 2')}${btn(3, 'Runde 3')}${btn(4, 'Runde 4')}${btn(5, 'Spielende')}</div>
+    ${r >= 1 && r <= 4 ? `<div class="mt-4 flex flex-wrap items-center gap-3 rounded-xl ${g.open ? 'bg-eco-50 border-eco-300' : 'bg-slate-50 border-slate-200'} border p-3">
+      <div><div class="font-semibold">Maßnahmenwahl Runde ${r}</div><div class="text-xs text-slate-500">${g.open ? 'Teams können jetzt Karten auswählen.' : 'Gesperrt – Teams sehen nur die Vorderseiten.'}</div></div>
+      <button data-act="toggle-open" class="ml-auto px-4 py-2 rounded-lg font-semibold ${g.open ? 'bg-slate-700 text-white hover:bg-slate-800' : 'bg-eco-700 text-white hover:bg-eco-800'}">${g.open ? 'Sperren' : 'Freigeben'}</button></div>` : ''}
+    <div class="overflow-x-auto mt-4"><table class="w-full text-sm"><thead class="text-[11px] uppercase text-slate-500"><tr><th class="text-left">Team</th><th>Bilanz</th><th>Abgabe R${Math.min(Math.max(r, 1), 4)}</th><th>Abgabe Karten (R2)</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="4" class="py-2 text-slate-400">Noch keine Teams beigetreten.</td></tr>'}</tbody></table></div>`, 'h-full');
+}
+
+/* ---------- Admin: Fragerunde ---------- */
+function adminQCtrlHTML() {
+  const g = G();
+  let opts = '';
+  [1, 2, 3, 4].forEach(r => {
+    opts += `<optgroup label="Fragerunde ${r}: ${esc(QUESTIONS[r].title)}">`;
+    QUESTIONS[r].items.forEach((it, i) => { const v = `${r}-${i}`; const txt = it.q.length > 70 ? it.q.slice(0, 70) + '…' : it.q; opts += `<option value="${v}" ${state.qSel === v ? 'selected' : ''}>${g.sent[v] ? '✓ ' : ''}F${i + 1}: ${esc(txt)}</option>`; });
+    opts += '</optgroup>';
+  });
+  return `<h3 class="font-bold text-lg mb-2">Fragerunde</h3>
+    <label for="qsel" class="text-sm font-medium">Frage auswählen (✓ = bereits gesendet)</label>
+    <div class="flex flex-col sm:flex-row gap-2 mt-1">
+      <select id="qsel" data-bind="qsel" class="flex-1 min-w-0 rounded-lg border-2 border-slate-200 px-2 py-2 text-sm focus:outline-none focus:border-eco-600">${opts}</select>
+      <button data-act="q-send" class="px-4 py-2 rounded-lg bg-yellow-400 text-yellow-950 font-bold hover:bg-yellow-300">An alle senden</button>
+    </div>`;
+}
+function adminQLiveHTML() {
+  const q = G().q;
+  if (!q) return `<p class="text-sm text-slate-500">Keine aktive Frage.</p>`;
+  const it = QUESTIONS[q.r].items[q.i]; const L = ['A', 'B', 'C'];
+  const st = { open: ['läuft', 'bg-yellow-100 text-yellow-800'], revealed: ['aufgelöst', 'bg-eco-100 text-eco-800'], closed: ['geschlossen', 'bg-slate-200 text-slate-600'] }[q.status];
+  const ans = TEAMS.filter(id => state.teams[id]).map(id => {
+    const t = state.teams[id]; const a = t.answer && t.answer.qid === q.id ? t.answer.c : null; const res = q.results[id];
+    return `<li class="flex items-center gap-2 text-sm"><span class="w-2.5 h-2.5 rounded-full" style="background:${TEAM_META[id].color}"></span><span class="truncate">${esc(teamName(id))}</span>
+      <span class="ml-auto font-bold">${a === null ? '<span class="text-slate-400 font-normal">keine Antwort</span>' : L[a]}</span>
+      ${res === true ? '<span class="text-eco-700 font-bold">✓ +1</span>' : res === false ? '<span class="text-red-600 font-bold">✗</span>' : ''}</li>`;
+  }).join('');
+  return `<div class="rounded-xl border border-slate-200 p-3">
+    <div class="flex items-center gap-2 mb-1"><span class="text-xs font-semibold px-2 py-0.5 rounded-full ${st[1]}">${st[0]}</span><span class="text-xs text-slate-500">Fragerunde ${q.r} · Frage ${q.i + 1}</span>
+      <span class="ml-auto font-extrabold tabular-nums" data-timer>${q.status === 'open' ? fmtTime(remaining(q)) : ''}</span></div>
+    <p class="font-semibold">${esc(it.q)}</p>
+    <ol class="text-sm mt-1 space-y-0.5">${it.a.map((a, i) => `<li class="${i === it.c ? 'text-eco-700 font-semibold' : 'text-slate-600'}">${L[i]}) ${esc(a)}${i === it.c ? ' ✓' : ''}</li>`).join('')}</ol>
+    <ul class="mt-3 space-y-1 border-t border-slate-100 pt-2">${ans || '<li class="text-sm text-slate-400">Keine Teams.</li>'}</ul>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button data-act="q-reveal" ${q.status !== 'open' ? 'disabled' : ''} class="px-4 py-2 rounded-lg font-semibold ${q.status !== 'open' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-eco-700 text-white hover:bg-eco-800'}">Auflösen</button>
+      <button data-act="q-close" ${q.status === 'closed' ? 'disabled' : ''} class="px-4 py-2 rounded-lg font-semibold ${q.status === 'closed' ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}">Fenster bei allen schließen</button>
+    </div></div>`;
+}
+
+/* ---------- Admin: Ranking ---------- */
+function adminRankHTML() {
+  const g = G(), r = g.round;
+  let live = '';
+  if (r >= 1 && r <= 4) {
+    const list = computeRanking(r);
+    live = `<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-[11px] uppercase text-slate-500"><tr><th class="text-left">Platz</th><th class="text-left">Team</th><th class="text-right">kWh</th><th class="text-right">Rang E</th><th class="text-right">kg CO₂</th><th class="text-right">Rang CO₂</th><th class="text-right">Summe</th><th class="text-right">Felder</th></tr></thead>
+      <tbody>${list.map(a => `<tr class="border-t border-slate-100 ${a.done ? '' : 'text-slate-400'}"><td class="py-1.5 font-bold">${a.place}.</td><td>${esc(teamName(a.id))}${a.done ? '' : ' <span class="text-xs">(nicht abgegeben)</span>'}</td><td class="text-right">${fmt(a.kwh)}</td><td class="text-right">${a.rk}</td><td class="text-right">${fmt(a.co2)}</td><td class="text-right">${a.rc}</td><td class="text-right font-semibold">${a.sum}</td><td class="text-right font-bold text-eco-700">+${a.fields}</td></tr>`).join('') || '<tr><td colspan="8" class="py-2 text-slate-400">Keine Teams.</td></tr>'}</tbody></table></div>
+      <div class="flex flex-wrap items-center gap-3 mt-3">
+        <button data-act="rank-eval" class="px-4 py-2 rounded-lg bg-eco-700 text-white font-semibold hover:bg-eco-800">Ranking Runde ${r} auswerten</button>
+        ${g.rankings[r] ? '<span class="text-sm text-eco-700 font-semibold">✓ bereits ausgewertet</span>' : '<span class="text-sm text-slate-500">Teams rücken automatisch vor.</span>'}
+      </div>`;
+  } else live = '<p class="text-sm text-slate-500">Das Ranking ist während der Runden 1–4 verfügbar.</p>';
+  return box(`<h3 class="font-bold text-lg mb-1">Runden-Ranking (Live-Vorschau)</h3><p class="text-xs text-slate-500 mb-3">Rangsumme aus Energie-Ranking und CO₂-Ranking; bei Gleichstand entscheidet die höhere Energieeinsparung, dann CO₂.</p>${live}`);
+}
+
+/* ---------- Admin: Team-Karten ---------- */
+function adminTeamsHTML() {
+  const r = G().round;
+  const cards = TEAMS.map(id => {
+    const t = state.teams[id], m = TEAM_META[id];
+    if (!t) return `<div class="rounded-2xl border-2 border-dashed border-slate-300 p-4 text-slate-400 flex items-center gap-2"><span class="w-4 h-4 rounded-full" style="background:${m.color}"></span>Team ${m.n} – noch nicht beigetreten</div>`;
+    const kwh = t.cons.strom + t.cons.gas + t.cons.diesel;
+    const c = t.cards[0];
+    let cardBox = '';
+    if (c) {
+      if (c.st === 'await') {
+        const tc = TEAMCARDS.find(x => x.id === c.id);
+        cardBox = `<div class="rounded-xl bg-purple-50 border-2 border-purple-400 p-3 mt-3"><div class="text-xs font-bold text-purple-700 uppercase">Teamkarte ${tc.id} – Bewertung nötig</div>
+          <p class="text-sm font-semibold mt-1">${esc(tc.q)}</p><p class="text-xs text-slate-600">${esc(tc.rule)}</p><p class="text-xs mt-1"><b>Lösung:</b> ${esc(tc.sol)}</p>
+          <div class="flex gap-2 mt-2"><button data-act="judge" data-t="${id}" data-ok="1" class="flex-1 py-1.5 rounded-lg bg-eco-700 text-white font-semibold hover:bg-eco-800">Richtig (+${tc.yes})</button>
+          <button data-act="judge" data-t="${id}" data-ok="0" class="flex-1 py-1.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700">Falsch (${tc.no})</button></div></div>`;
+      } else cardBox = `<div class="text-xs mt-3 px-2 py-1.5 rounded-lg ${c.type === 'E' ? 'bg-red-50 text-red-700' : 'bg-purple-50 text-purple-700'}">${c.type === 'E' ? 'Ereigniskarte' : 'Teamkarte'} (Feld ${c.field}): ${c.st === 'ready' ? 'noch nicht gezogen' : 'wird angezeigt'}</div>`;
+    }
+    const lastLog = t.log.length ? t.log[t.log.length - 1].m : '–';
+    const ch = r >= 1 && r <= 4 && t.chosen[r] ? t.chosen[r].join(', ') : 'offen';
+    return `<div class="rounded-2xl bg-white border-2 shadow-sm p-4" style="border-color:${m.color}">
+      <div class="flex items-center gap-2"><span class="w-8 h-8 rounded-full flex items-center justify-center font-extrabold" style="background:${m.color};color:${m.fg}">${m.n}</span>
+        <div class="min-w-0"><div class="font-bold truncate">${esc(t.name)}</div><div class="text-xs text-slate-500">Feld ${t.pos} · ${t.bilanz ? 'Bilanz ✓' : 'Bilanz offen'}</div></div></div>
+      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs mt-3">
+        <dt class="text-slate-500">Budget</dt><dd class="text-right font-semibold ${t.budget < 0 ? 'text-red-600' : ''}">${eur(t.budget)}</dd>
+        <dt class="text-slate-500">Verbrauch</dt><dd class="text-right">${fmt(kwh)} kWh</dd>
+        <dt class="text-slate-500">CO₂</dt><dd class="text-right">${fmt(t.co2)} kg</dd>
+        <dt class="text-slate-500">Einsparung</dt><dd class="text-right text-eco-700 font-semibold">${fmt(START_KWH - kwh)} kWh</dd>
+        <dt class="text-slate-500">Abgabe R${Math.min(Math.max(r, 1), 4)}</dt><dd class="text-right">${ch}</dd>
+      </dl>
+      ${cardBox}
+      <div class="text-[11px] text-slate-500 mt-3 truncate" title="${esc(lastLog)}">Letzter Schritt: ${esc(lastLog)}</div>
+      <div class="flex gap-1.5 mt-2">
+        <button data-act="undo" data-t="${id}" class="flex-1 py-1.5 rounded-lg bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">↶ Rückgängig</button>
+        <button data-act="move" data-t="${id}" data-d="-1" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-bold hover:bg-slate-50" aria-label="Ein Feld zurück">−1</button>
+        <button data-act="move" data-t="${id}" data-d="1" class="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-bold hover:bg-slate-50" aria-label="Ein Feld vor">+1</button>
+      </div></div>`;
+  }).join('');
+  return `<h3 class="font-bold text-lg mb-3">Teams live</h3><div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">${cards}</div>`;
+}
+function adminDangerHTML() {
+  return box(`<div class="flex flex-wrap items-center gap-3"><div><h3 class="font-bold">Spiel zurücksetzen</h3><p class="text-sm text-slate-500">Löscht alle Teams, Fortschritte und die Undo-Historie.</p></div>
+    <button data-act="reset" class="ml-auto px-4 py-2 rounded-lg border-2 border-red-500 text-red-600 font-semibold hover:bg-red-50">Spiel vollständig zurücksetzen</button></div>`);
+}
+
+/* ---------- Haupt-Render ---------- */
+function render() {
+  if (typeof document === 'undefined') return;
+  const app = document.getElementById('app');
+  const g = G(); const view = currentView();
+  const key = state.team + '|' + g.round;
+  if (state.selKey !== key) { state.selKey = key; state.sel = []; state.delSel = []; }
+  if (state.qSelRound !== g.round) { state.qSelRound = g.round; if (g.round >= 1 && g.round <= 4) state.qSel = `${g.round}-0`; }
+
+  if (view !== lastView) {
+    lastView = view; Object.keys(sigs).forEach(k => delete sigs[k]);
+    app.innerHTML = LAYOUTS[view]();
+    if (document.getElementById('board')) { buildBoard(); observeBoard(); }
+  }
+  const teamsSig = JSON.stringify(TEAMS.map(id => state.teams[id]));
+  if (view !== 'login') region('r-header', JSON.stringify([g.round, state.connected, state.role, state.team, state.team && state.teams[state.team] && state.teams[state.team].name]), headerHTML);
+
+  if (view === 'login') region('r-login', JSON.stringify([state.loginMode, state.pwErr, TEAMS.map(id => state.teams[id] && [state.teams[id].name, state.teams[id].pos])]), loginHTML);
+  else if (view === 'join') region('r-join', state.team, joinHTML);
+  else if (view === 'team') {
+    const t = state.teams[state.team];
+    const tNoAns = Object.assign({}, t, { answer: null });
+    region('r-end', JSON.stringify([g.round, g.round >= 5 ? teamsSig : '']), endHTML);
+    region('r-side', JSON.stringify([t.impl, t.usedE, t.usedT, t.cards[0] || null]), () => sideTeamHTML(t));
+    region('r-cards', JSON.stringify(t.cards), () => cardPanelHTML(t));
+    region('r-bilanz', JSON.stringify([t.bilanz, g.round >= 1, state.bfErr, t.name]), () => bilanzHTML(t));
+    region('r-dash', JSON.stringify([tNoAns, g.round]), () => dashHTML(t));
+    region('r-rank', JSON.stringify([TEAMS.map(id => { const x = state.teams[id]; return x && [x.name, x.pos, x.rs, x.cons, x.co2]; }), g.rankings, g.round, state.team]), rankHTML);
+    region('r-measures', JSON.stringify([g.round, g.open, t.bilanz, t.chosen, t.impl, t.deleted, t.delDone, t.budget, t.rs, state.sel, state.delSel]), () => measuresHTML(t));
+    region('r-modal', JSON.stringify([g.q, t.answer, state.dismissed[g.q && g.q.id], g.q ? isExpired(g.q) : null]), () => modalHTML(t));
+  } else if (view === 'admin') {
+    region('r-end', JSON.stringify([g.round, g.round >= 5 ? teamsSig : '']), endHTML);
+    region('r-side', teamsSig, sideAdminHTML);
+    region('r-adm-round', JSON.stringify([g.round, g.open, teamsSig]), adminRoundHTML);
+    region('r-adm-qctrl', JSON.stringify([state.qSel, g.sent]), adminQCtrlHTML);
+    region('r-adm-qlive', JSON.stringify([g.q, TEAMS.map(id => state.teams[id] && [state.teams[id].name, state.teams[id].answer]), g.q ? isExpired(g.q) : null]), adminQLiveHTML);
+    region('r-adm-rank', JSON.stringify([g.round, g.rankings, TEAMS.map(id => state.teams[id] && [state.teams[id].name, state.teams[id].rs, state.teams[id].chosen])]), adminRankHTML);
+    region('r-adm-teams', JSON.stringify([g.round, teamsSig]), adminTeamsHTML);
+    region('r-adm-danger', 'static', adminDangerHTML);
+  }
+  positionTokens();
+}
+
+function tick() {
+  const q = G().q; if (!q) return;
+  const rem = remaining(q);
+  const txt = q.status === 'open' ? fmtTime(rem) : (q.status === 'revealed' ? 'aufgelöst' : '');
+  document.querySelectorAll('[data-timer]').forEach(el => {
+    if (el.textContent !== txt) el.textContent = txt;
+    el.classList.toggle('text-red-400', q.status === 'open' && rem <= 10);
+  });
+  document.querySelectorAll('[data-timerbar]').forEach(el => { el.style.width = (q.status === 'open' ? rem / QUESTION_SECONDS * 100 : 0) + '%'; });
+  const exp = isExpired(q);
+  if (exp !== state.lastExpired) { state.lastExpired = exp; render(); }
+}
+
+/* =====================================================================
+   7. EVENTS
+   ===================================================================== */
+function setHash(h) { try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) { /* Sandbox */ } }
+
+async function handle(act, el) {
+  const d = el ? el.dataset : {};
+  switch (act) {
+    case 'pick-team': state.role = 'team'; state.team = d.t; state.nameInput = ''; setHash(d.t); render(); break;
+    case 'show-admin': state.loginMode = 'admin'; render(); setTimeout(() => { const p = document.getElementById('pw'); if (p) p.focus(); }, 30); break;
+    case 'admin-login':
+      if (state.pw === ADMIN_PASSWORD) { state.role = 'admin'; state.pw = ''; state.pwErr = false; await ensureGame(); }
+      else { state.pwErr = true; sigs['r-login'] = null; }
+      render(); break;
+    case 'logout': state.role = null; state.team = null; state.loginMode = null; setHash(''); render(); break;
+    case 'join': await guarded(joinTeam); break;
+    case 'bilanz': await guarded(checkBilanz); break;
+    case 'sel-toggle': {
+      const id = d.id; const i = state.sel.indexOf(id);
+      if (i >= 0) state.sel.splice(i, 1); else state.sel.push(id);
+      render(); break;
+    }
+    case 'sel-submit': if (confirm('Maßnahmen verbindlich umsetzen? Danach ist keine Änderung mehr möglich.')) await guarded(submitMeasures); break;
+    case 'del-toggle': {
+      const t = state.teams[state.team]; const need = Math.max(0, leftover2(t).length - 4);
+      const i = state.delSel.indexOf(d.id);
+      if (i >= 0) state.delSel.splice(i, 1); else if (state.delSel.length < need) state.delSel.push(d.id);
+      render(); break;
+    }
+    case 'del-submit': if (confirm('Diese Karten endgültig abgeben?')) await guarded(submitDeletion); break;
+    case 'draw': await guarded(drawCard); break;
+    case 'ack': await guarded(ackCard); break;
+    case 'answer': await guarded(() => answerQuestion(Number(d.c))); break;
+    case 'q-dismiss': { const q = G().q; if (q) state.dismissed[q.id] = true; render(); break; }
+    // Admin
+    case 'round': await setRound(Number(d.r)); break;
+    case 'toggle-open': await DB.update('game', { open: !G().open }); break;
+    case 'q-send': await sendQuestion(); break;
+    case 'q-reveal': await guarded(revealQuestion); break;
+    case 'q-close': await closeQuestion(); break;
+    case 'rank-eval': await guarded(evaluateRanking); break;
+    case 'undo': await guarded(() => undoTeam(d.t)); break;
+    case 'judge': await guarded(() => judgeTeamCard(d.t, d.ok === '1')); break;
+    case 'move': await guarded(() => manualMove(d.t, Number(d.d))); break;
+    case 'reset': await resetGame(); break;
+  }
+}
+
+function bindEvents() {
+  document.addEventListener('click', e => {
+    const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+    handle(el.dataset.act, el).catch(err => { console.error(err); alert('Fehler: ' + (err && err.message ? err.message : err)); });
+  });
+  document.addEventListener('input', e => {
+    const b = e.target.dataset && e.target.dataset.bind; if (!b) return;
+    const v = e.target.value;
+    if (b === 'pw') state.pw = v;
+    else if (b === 'name') state.nameInput = v;
+    else if (b.indexOf('bf-') === 0) state.bf[b.slice(3)] = v;
+  });
+  document.addEventListener('change', e => {
+    const b = e.target.dataset && e.target.dataset.bind;
+    if (b === 'qsel') { state.qSel = e.target.value; render(); }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const b = e.target.dataset && e.target.dataset.bind; if (!b) return;
+    if (b === 'pw') handle('admin-login');
+    else if (b === 'name') handle('join');
+    else if (b.indexOf('bf-') === 0) handle('bilanz');
+  });
+  window.addEventListener('resize', () => positionTokens());
+}
+
+/* =====================================================================
+   8. START
+   ===================================================================== */
+function boot() {
+  DB = createDB();
+  const h = (location.hash || '').replace('#', '');
+  if (TEAMS.includes(h)) { state.role = 'team'; state.team = h; }
+  DB.listen('game', v => { state.game = normGame(v); scheduleRender(); });
+  TEAMS.forEach(id => DB.listen('state/' + id, v => { state.teams[id] = parseTeam(v); scheduleRender(); }));
+  if (DB.onConnection) DB.onConnection(c => { state.connected = c; scheduleRender(); });
+  bindEvents();
+  setInterval(tick, 250);
+  render();
+}
+if (typeof window !== 'undefined' && window.document) boot();
+</script>
 </body>
 </html>
