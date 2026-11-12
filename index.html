@@ -23,16 +23,16 @@
         .card:hover:not(.disabled-card) { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .disabled-card { opacity: 0.5; filter: grayscale(100%); pointer-events: none; }
         .active-card { border: 4px solid #2E7D32; background-color: #e8f5e9; }
-        .modal-bg { background-color: rgba(0,0,0,0.6); }
+        .modal-bg { background-color: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
         .timer-bar { transition: width 1s linear; }
 
-        /* Zick-Zack Brettspiel-Layout */
+        /* Perfektes Zick-Zack Brettspiel-Layout */
         .board-container {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
             grid-template-rows: repeat(4, 1fr);
             gap: 6px;
-            padding: 10px;
+            padding: 12px;
             background-color: #f8fafc;
             border-radius: 12px;
             border: 2px solid #e2e8f0;
@@ -49,6 +49,7 @@
             position: relative;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
             border: 2px solid transparent;
+            transition: all 0.3s;
         }
         .pawn-container {
             display: flex;
@@ -71,16 +72,14 @@
             color: white;
             box-shadow: 0 3px 5px rgba(0,0,0,0.3);
             border: 2px solid white;
-            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             z-index: 10;
         }
-        @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body class="text-gray-800 h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-ecoGreen text-white p-4 shadow-md sticky top-0 z-50 flex-shrink-0">
+    <header class="bg-ecoGreen text-white p-4 shadow-md sticky top-0 z-40 flex-shrink-0">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div>
                 <h1 class="text-2xl font-bold tracking-wider">RE:GEBÄUDE</h1>
@@ -100,18 +99,10 @@
             <p class="mb-8 text-gray-600 text-lg">Bitte wähle dein Team aus oder logge dich als Spielleitung ein.</p>
             
             <div class="grid grid-cols-2 gap-4 mb-10">
-                <button onclick="loginAs('Team 1')" class="bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition text-xl shadow flex items-center justify-center gap-2">
-                    Team 1
-                </button>
-                <button onclick="loginAs('Team 2')" class="bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition text-xl shadow flex items-center justify-center gap-2">
-                    Team 2
-                </button>
-                <button onclick="loginAs('Team 3')" class="bg-amber-500 text-white font-bold py-4 rounded-lg hover:bg-amber-600 transition text-xl shadow flex items-center justify-center gap-2">
-                    Team 3
-                </button>
-                <button onclick="loginAs('Team 4')" class="bg-purple-600 text-white font-bold py-4 rounded-lg hover:bg-purple-700 transition text-xl shadow flex items-center justify-center gap-2">
-                    Team 4
-                </button>
+                <button onclick="loginAs('Team 1')" class="bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition text-xl shadow flex items-center justify-center gap-2">Team 1</button>
+                <button onclick="loginAs('Team 2')" class="bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition text-xl shadow flex items-center justify-center gap-2">Team 2</button>
+                <button onclick="loginAs('Team 3')" class="bg-amber-500 text-white font-bold py-4 rounded-lg hover:bg-amber-600 transition text-xl shadow flex items-center justify-center gap-2">Team 3</button>
+                <button onclick="loginAs('Team 4')" class="bg-purple-600 text-white font-bold py-4 rounded-lg hover:bg-purple-700 transition text-xl shadow flex items-center justify-center gap-2">Team 4</button>
             </div>
 
             <div class="border-t pt-8 bg-gray-50 rounded-b-xl -mx-8 -mb-8 pb-8">
@@ -123,38 +114,34 @@
             </div>
         </div>
 
-        <!-- ================= ECHTES VISUELLES SPIELFELD (Für alle sichtbar) ================= -->
+        <!-- ================= SPIELFELD (Für alle sichtbar) ================= -->
         <div id="visual-board-container" class="hidden max-w-7xl mx-auto mb-6 bg-white rounded-xl shadow-lg p-5 border-2 border-ecoGreen">
             <div class="flex flex-wrap justify-between items-center mb-4 pb-3 border-b">
                 <div>
                     <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <span>🎲</span> RE:GEBÄUDE Spielplan
                     </h3>
-                    <p class="text-xs text-gray-500 mt-1">Die Teams ziehen schlangenförmig von Feld 1 bis 40.</p>
                 </div>
-                <!-- Legende -->
                 <div class="flex flex-wrap gap-3 text-xs font-semibold bg-gray-50 p-2 rounded border">
-                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-red-100 border-2 border-red-500 text-center">⭐</span> Ereigniskarte</span>
-                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-purple-100 border-2 border-purple-500 text-center">🤝</span> Teamkarte</span>
+                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-red-100 border-2 border-red-500 text-center">⭐</span> Ereigniskarten</span>
+                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-purple-100 border-2 border-purple-500 text-center">🤝</span> Teamkarten</span>
                 </div>
             </div>
-
-            <!-- Das 40-Felder Zick-Zack Grid -->
-            <div id="board-grid" class="board-container overflow-x-auto min-w-[700px]">
-                <!-- Wird per JS befüllt -->
-            </div>
+            <div id="board-grid" class="board-container overflow-x-auto min-w-[700px]"></div>
         </div>
 
         <!-- ================= TEAM-ANSICHT ================= -->
         <div id="view-team" class="hidden max-w-7xl mx-auto">
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <!-- Linke Spalte: Dashboard & Bilanz -->
+                
+                <!-- Linke Spalte (Dashboard & Karten-Trigger) -->
                 <div class="xl:col-span-1 space-y-6">
                     
-                    <!-- Ereigniskarten Hinweis -->
-                    <div id="field-action-container" class="hidden bg-red-50 border-2 border-red-500 rounded-xl p-4 shadow animate-pulse text-center">
-                        <h3 class="font-bold text-red-800 mb-2" id="field-action-title">Du stehst auf einem Ereignisfeld!</h3>
-                        <button onclick="drawBoardCard()" class="bg-red-600 text-white font-bold py-2 px-4 rounded hover:bg-red-700 shadow w-full">Karte ziehen</button>
+                    <!-- Ereigniskarten Kasten (Manuell schließbar durch Modal) -->
+                    <div id="field-action-container" class="hidden bg-gradient-to-r from-red-50 to-purple-50 border-2 border-red-400 rounded-xl p-5 shadow-lg text-center transform transition animate-pulse">
+                        <h3 class="font-bold text-gray-800 mb-1 text-lg" id="field-action-title">Ihr steht auf einem Sonderfeld!</h3>
+                        <p class="text-sm text-gray-600 mb-4">Zieht eine Karte, um zu sehen, was passiert.</p>
+                        <button onclick="drawBoardCard()" class="bg-gray-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-900 shadow-md w-full text-lg">🃏 Karte jetzt ziehen</button>
                     </div>
 
                     <!-- Dashboard -->
@@ -163,7 +150,7 @@
                         
                         <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
                             <p class="text-xs text-gray-500 uppercase font-bold mb-1">Verfügbares Budget (Investitionen)</p>
-                            <p id="t-budget" class="text-4xl font-black text-blue-600 tracking-tight">0 €</p>
+                            <p id="t-budget" class="text-4xl font-black text-blue-600 tracking-tight">100.000 €</p>
                         </div>
                         
                         <div class="grid grid-cols-2 gap-4">
@@ -178,43 +165,31 @@
                         </div>
                     </div>
 
-                    <!-- Energiebilanz Tool (nur in Runde 1 aktiv) -->
+                    <!-- Energiebilanz Tool -->
                     <div id="energyBalanceTool" class="bg-white rounded-xl shadow-lg p-6 border-2 border-ecoYellow bg-yellow-50 hidden">
                         <h3 class="font-bold text-lg mb-2 text-gray-800">Aufgabe: Energiebilanz erstellen</h3>
-                        <p class="text-sm text-gray-600 mb-4">Tragt die exakten Ausgangswerte eures Gebäudes ein, um das Dashboard freizuschalten.</p>
+                        <p class="text-sm text-gray-600 mb-4">Tragt die Ausgangswerte ein, um das Dashboard freizuschalten.</p>
                         <div class="space-y-3 mb-4">
-                            <div>
-                                <label class="text-xs font-bold text-gray-500">Strom (kWh):</label>
-                                <input type="number" id="eb-strom" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500">Erdgas (kWh):</label>
-                                <input type="number" id="eb-gas" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
-                            </div>
-                            <div>
-                                <label class="text-xs font-bold text-gray-500">Diesel (kWh):</label>
-                                <input type="number" id="eb-diesel" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
-                            </div>
+                            <div><label class="text-xs font-bold text-gray-500">Strom (kWh):</label><input type="number" id="eb-strom" class="w-full border p-2 rounded text-sm shadow-inner"></div>
+                            <div><label class="text-xs font-bold text-gray-500">Erdgas (kWh):</label><input type="number" id="eb-gas" class="w-full border p-2 rounded text-sm shadow-inner"></div>
+                            <div><label class="text-xs font-bold text-gray-500">Diesel (kWh):</label><input type="number" id="eb-diesel" class="w-full border p-2 rounded text-sm shadow-inner"></div>
                         </div>
                         <button onclick="submitEnergyBalance()" class="w-full bg-ecoYellow text-black font-bold py-3 rounded shadow hover:bg-yellow-500 transition">Werte prüfen & Freischalten</button>
                     </div>
                 </div>
 
-                <!-- Rechte Spalte: Maßnahmenkarten -->
+                <!-- Rechte Spalte (Maßnahmen) -->
                 <div class="xl:col-span-2">
                     <div class="bg-white rounded-xl shadow-lg p-6 min-h-full">
                         <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4">
                             <h2 class="text-2xl font-bold text-gray-800">Maßnahmenkarten (Runde <span id="uiRoundNum">1</span>)</h2>
                             <div class="flex gap-2">
-                                <span class="text-sm bg-blue-100 text-blue-800 font-bold px-3 py-1.5 rounded-full" id="t-budgetInfo">Budget diese Runde: 0 €</span>
+                                <span class="text-sm bg-blue-100 text-blue-800 font-bold px-3 py-1.5 rounded-full" id="t-budgetInfo">Budget: 100.000 €</span>
                                 <span class="text-sm bg-gray-200 text-gray-800 font-bold px-3 py-1.5 rounded-full" id="t-measuresLeft">Wählbar: 3</span>
                             </div>
                         </div>
-                        <p class="text-sm text-gray-600 mb-6 font-medium bg-blue-50 p-3 rounded border border-blue-100" id="t-roundRules">Wählt die besten Maßnahmen. Klickt auf eine Karte, um sie umzusetzen.</p>
-                        
-                        <div id="t-measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Karten durch JS -->
-                        </div>
+                        <p class="text-sm text-gray-600 mb-6 font-medium bg-blue-50 p-3 rounded border border-blue-100" id="t-roundRules">Wählt Maßnahmen aus.</p>
+                        <div id="t-measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
                     </div>
                 </div>
             </div>
@@ -222,21 +197,13 @@
 
         <!-- ================= ADMIN-ANSICHT ================= -->
         <div id="view-admin" class="hidden max-w-7xl mx-auto space-y-6">
-            
-            <!-- ADMIN SPICKZETTEL -->
             <div class="bg-blue-900 text-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h3 class="font-bold text-xl text-blue-100 mb-1">Trainer-Spickzettel: Lösungs-Werte für die Energiebilanz</h3>
-                    <p class="text-sm text-blue-300">Diese Werte müssen die Teams in Runde 1 eingeben, um ihr Dashboard zu aktivieren:</p>
-                </div>
-                <div class="flex gap-4 bg-blue-800 p-3 rounded-lg border border-blue-700 text-sm">
-                    <div><span class="text-blue-300">Strom:</span> <br><strong class="text-lg text-white">219.000</strong></div>
-                    <div><span class="text-blue-300">Erdgas:</span> <br><strong class="text-lg text-white">415.000</strong></div>
-                    <div><span class="text-blue-300">Diesel:</span> <br><strong class="text-lg text-white">368.000</strong></div>
+                    <p class="text-sm text-blue-300">Ursprüngliche Verbrauchswerte für die Teams: Strom: 219.000 | Erdgas: 415.000 | Diesel: 368.000</p>
                 </div>
             </div>
 
-            <!-- Cockpit Controls -->
             <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-gray-800">
                 <div class="flex justify-between items-center mb-6 border-b pb-4">
                     <h2 class="text-3xl font-bold text-gray-800">Spiel-Steuerung</h2>
@@ -244,69 +211,69 @@
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Runden Steuerung -->
+                    <!-- Runden & Ranking -->
                     <div class="bg-gray-50 p-4 rounded-lg border">
                         <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Spielrunden steuern</h3>
                         <div class="grid grid-cols-2 gap-2 mb-4">
-                            <button onclick="adminSetRound(1)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 1</button>
-                            <button onclick="adminSetRound(2)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 2</button>
-                            <button onclick="adminSetRound(3)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 3</button>
-                            <button onclick="adminSetRound(4)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 4</button>
+                            <button onclick="adminSetRound(1)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 1</button>
+                            <button onclick="adminSetRound(2)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 2</button>
+                            <button onclick="adminSetRound(3)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 3</button>
+                            <button onclick="adminSetRound(4)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border">Runde 4</button>
                         </div>
                         <button onclick="adminEvalRanking()" class="w-full bg-purple-600 text-white px-4 py-3 rounded font-bold hover:bg-purple-700 transition shadow">🏁 Runden-Ranking auswerten (Teams vorrücken)</button>
                     </div>
 
-                    <!-- Fragerunde Steuerung -->
-                    <div class="bg-gray-50 p-4 rounded-lg border flex flex-col justify-between">
+                    <!-- Neue, strikte Fragen-Steuerung -->
+                    <div class="bg-gray-50 p-4 rounded-lg border flex flex-col justify-between border-ecoYellow">
                         <div>
-                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Wissensfragen (Seminar-Runden)</h3>
-                            <select id="adminQuestionSelect" class="w-full border p-3 rounded mb-4 font-medium shadow-inner bg-white">
-                                <!-- JS füllt das -->
-                            </select>
+                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Seminar-Fragerunden</h3>
+                            <select id="adminQuestionSelect" class="w-full border p-3 rounded mb-4 font-medium shadow-inner bg-white"></select>
                         </div>
-                        <div class="flex gap-2 mt-auto">
-                            <button onclick="adminShowQuestion()" class="flex-1 bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border border-yellow-600">60s Timer Starten</button>
-                            <button onclick="adminHideQuestion()" class="flex-1 bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">Fenster schließen</button>
+                        <div class="flex flex-col gap-2 mt-auto">
+                            <button onclick="adminStartQuestion()" class="bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border">1. Frage an alle senden (60s Timer)</button>
+                            <button onclick="adminResolveQuestion()" class="bg-blue-600 text-white px-4 py-3 rounded font-bold hover:bg-blue-700 shadow">2. Antwort auflösen & Teams weiterrücken</button>
+                            <button onclick="adminCloseQuestion()" class="bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">3. Frage-Fenster bei allen schließen</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Teams Live-Übersicht -->
             <h3 class="text-xl font-bold text-gray-800 pt-4">Live-Status der Teams</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="adminTeamsGrid">
-                <!-- Durch JS generiert -->
-            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="adminTeamsGrid"></div>
         </div>
 
     </main>
 
-    <!-- ================= MODAL: FRAGEN (Seminarrunde) ================= -->
-    <div id="questionModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
+    <!-- ================= MODAL: SEMINAR-FRAGEN (60 Sekunden Timer) ================= -->
+    <div id="questionModal" class="hidden fixed inset-0 modal-bg z-[100] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-3xl w-full relative border-t-8 border-ecoYellow">
             <div class="absolute top-0 left-0 h-2 bg-ecoGreen timer-bar" id="q-timer-bar" style="width: 100%;"></div>
             <div class="flex justify-between items-center mb-6 mt-2">
-                <h2 class="text-2xl font-bold text-gray-800" id="qm-title">Fragerunde</h2>
-                <span class="bg-gray-800 text-white font-mono font-bold px-3 py-1 rounded text-xl" id="q-timer-text">60</span>
+                <h2 class="text-2xl font-bold text-gray-800" id="qm-title">Seminar-Fragerunde</h2>
+                <span class="bg-gray-800 text-white font-mono font-bold px-4 py-2 rounded text-2xl shadow" id="q-timer-text">60</span>
             </div>
             <p class="text-xl mb-8 font-medium text-gray-700 leading-relaxed" id="qm-text">Frage Text...</p>
-            <div id="qm-options" class="flex flex-col gap-3">
-                <!-- Buttons durch JS -->
-            </div>
+            <div id="qm-options" class="flex flex-col gap-3"></div>
             <div id="qm-feedback" class="mt-6 p-4 rounded-lg hidden text-center"></div>
-            
-            <div id="qm-close-btn" class="hidden mt-6 text-center">
-                <button onclick="closeModalLocally()" class="bg-gray-200 text-gray-800 font-bold px-6 py-2 rounded hover:bg-gray-300">Fenster schließen</button>
-            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL: SPIELFELD-KARTEN (Ereignis & Team) ================= -->
+    <div id="cardModal" class="hidden fixed inset-0 modal-bg z-[90] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center border-t-8" id="cm-border">
+            <div class="text-5xl mb-4" id="cm-icon">⭐</div>
+            <h2 class="text-3xl font-black mb-4 text-gray-800" id="cm-title">Gezogene Karte</h2>
+            <p class="text-lg mb-6 text-gray-700 leading-relaxed" id="cm-text">Kartenbeschreibung...</p>
+            <div id="cm-effect" class="bg-gray-100 p-4 rounded-lg mb-8 font-bold text-xl text-ecoGreen border-2 border-gray-200"></div>
+            <button onclick="closeCardModal()" class="bg-gray-800 text-white font-bold py-3 px-10 rounded-lg hover:bg-gray-900 shadow-lg text-lg">Schließen & Weiter</button>
         </div>
     </div>
 
 
-    <!-- ================= JAVASCRIPT ================= -->
     <script>
-        // ----------------------------------------------------
-        // 1. FIREBASE KONFIGURATION (Hier Platzhalter ausfüllen)
-        // ----------------------------------------------------
+        // =========================================================================
+        // HIER DEINE FIREBASE DATEN EINTRAGEN (aus firebaseConfig)
+        // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyBU_L3Nyv-0-40mTmdQqmRA_R1VINvakAE",
             authDomain: "re-gebaeude.firebaseapp.com",
@@ -320,11 +287,9 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // ----------------------------------------------------
-        // SPIELFELD DEFINITION (40 FELDER)
-        // ----------------------------------------------------
         const TOTAL_FIELDS = 40;
         
+        // Definition der Spezialfelder
         const SPECIAL_FIELDS = {
             4: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
             6: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
@@ -343,50 +308,57 @@
             39: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
         };
 
-        const TEAM_COLORS = {
-            "Team 1": "bg-blue-600",
-            "Team 2": "bg-emerald-600",
-            "Team 3": "bg-amber-500",
-            "Team 4": "bg-purple-600"
-        };
+        const TEAM_COLORS = { "Team 1": "bg-blue-600", "Team 2": "bg-emerald-600", "Team 3": "bg-amber-500", "Team 4": "bg-purple-600" };
 
-        const RANDOM_CARDS = [
-            { text: "Ihr Geschäftsführer hat entschieden, sich an einem Energieeffizienznetzwerk zu beteiligen.", effect: 2, eType: 'pos' },
-            { text: "Zwei Auszubildende werden zu Energiescouts weitergebildet. Positiver Effekt!", effect: 1, eType: 'pos' },
-            { text: "Ihr habt einen Preis beim Energieeffizienz-Wettbewerb gewonnen! (+5.000 €)", effect: 0, budgetAdd: 5000, eType: 'pos' },
-            { text: "Die Mitarbeiter haben einen Monat lang den Fahrstuhl nicht benutzt.", effect: 1, eType: 'pos' },
-            { text: "Der Hausmeister repariert alle Dichtungen freiwillig.", effect: 1, eType: 'pos' },
-            { text: "Im Sommer steigt die Temperatur. Eine ineffiziente Klimaanlage muss installiert werden! (-5.000 €)", effect: 0, budgetAdd: -5000, eType: 'neg' }
+        // Echte Ereignis- und Teamkarten aus dem PDF
+        const EREIGNIS_KARTEN = [
+            { title: "Energieeffizienznetzwerk", text: "Ihr Geschäftsführer hat entschieden, sich an einem Energieeffizienznetzwerk zu beteiligen. Dies bringt einen zusätzlichen Schub.", effect: "+2 Felder vor", change: 2, type: "pos" },
+            { title: "Energiescouts", text: "Zwei Auszubildende aus Ihrem Betrieb werden kostenfrei zu 'Energiescouts' weitergebildet. Das wirkt sich positiv aus.", effect: "+1 Feld vor", change: 1, type: "pos" },
+            { title: "Wettbewerb Gewonnen!", text: "Sie haben einen Preis bei einem Energieeffizienz-Wettbewerb gewonnen.", effect: "+ 5.000 € für Ihr Budget", budget: 5000, type: "pos" },
+            { title: "Fahrstuhl-Verzicht", text: "Die Mitarbeiter/innen haben einen Monat lang den Fahrstuhl nicht benutzt. Dadurch werden ca. 500 kWh Strom eingespart.", effect: "+1 Feld vor", change: 1, type: "pos" },
+            { title: "Dichtungen repariert", text: "Der Hausmeister prüft alle Türen/Fenster und repariert diese. Damit wird das Wohlfühlklima gesteigert und Energie gespart.", effect: "+1 Feld vor", change: 1, type: "pos" },
+            { title: "Hitze im Sommer", text: "Im Sommer steigt die Temperatur im Büro über 30°C. Es muss eine Klimaanlage installiert werden.", effect: "- 5.000 € Zusatzkosten", budget: -5000, type: "neg" }
         ];
 
-        // ----------------------------------------------------
-        // 2. SPIEL-DATEN (Fragen & Maßnahmen aus Dokument)
-        // ----------------------------------------------------
+        // Teamkarten prüfen automatisch, ob bestimmte Maßnahmen gekauft wurden
+        const TEAM_KARTEN = [
+            { title: "Mitarbeiter Verhalten", text: "Nennen Sie 3 Bereiche, bei denen Mitarbeiter Einfluss auf Energieeinsparung nehmen können.", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
+            { title: "Schulung", text: "Wurden die Mitarbeiter/innen zum Thema Energie geschult?", checkReq: "A1", effectOk: "Ja (Maßnahme A1 gekauft) -> +2 Felder vor", effectFail: "Nein -> -2 Felder zurück", ok: 2, fail: -2 },
+            { title: "Heizungskonzept", text: "Wurde ein Heizungskonzept erstellt?", checkReq: "A3", effectOk: "Ja (Maßnahme A3 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
+            { title: "Stand-by Geräte", text: "Nennen Sie drei Geräte, die nach Arbeitsschluss im Stand-by sind.", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
+            { title: "PC Stromverbrauch", text: "Wann verbraucht ein PC keinen Strom mehr? (Antwort: Wenn komplett vom Netz genommen)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
+            { title: "Fahrertraining", text: "Haben die Vertriebsmitarbeiter/innen ein Fahrertraining absolviert?", checkReq: "B2", effectOk: "Ja (Maßnahme B2 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
+            { title: "Beleuchtung umgestellt", text: "Wurde die Beleuchtung auf LED umgestellt?", checkReq: "C2_or_C3", effectOk: "Ja (Maßnahme C2/C3 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
+            { title: "Licht sensibilisiert", text: "Wurden die Mitarbeiter/innen zum Thema Licht sensibilisiert?", checkReq: "C1", effectOk: "Ja (Maßnahme C1 gekauft) -> +1 Feld vor", effectFail: "Nein -> -1 Feld zurück", ok: 1, fail: -1 },
+            { title: "Umwälzpumpe", text: "Wie viel Energie kann mit hocheffizienter Umwälzpumpe gespart werden? (Antwort: ca. 80%)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true },
+            { title: "Leuchtstoffröhre", text: "Ab wann lohnt sich das Ausschalten einer Leuchtstoffröhre? (Antwort: Sofort)", checkReq: null, effectOk: "+1 Feld vor", effectFail: "-1 Feld zurück", ok: 1, fail: -1, isManual: true }
+        ];
+
         const QUESTIONS = [
             { id: "q1", r: 1, text: "Wie hoch war der Anteil erneuerbarer Energien am deutschen Bruttostromverbrauch im Jahr 2025?", opts: ["A. Etwa 40 %", "B. Etwa 55,1 %", "C. Etwa 80 %"], correct: 1 },
             { id: "q2", r: 1, text: "Wie hoch waren die durchschnittlichen direkten CO₂-Emissionen des in Deutschland verbrauchten Stroms im Jahr 2025 ungefähr?", opts: ["A. Etwa 50 g CO₂/kWh", "B. Etwa 344 g CO₂/kWh", "C. Etwa 600 g CO₂/kWh"], correct: 1 },
-            { id: "q3", r: 1, text: "Welche Klimaschutzziele sind im deutschen Bundes-Klimaschutzgesetz festgelegt?", opts: ["A. Mindestens 55 % bis 2030, Klimaneutralität bis 2050", "B. Mindestens 65 % bis 2030, mindestens 88 % bis 2040, Treibhausgasneutralität bis 2045", "C. Mindestens 80 % bis 2030, Neutralität bis 2040"], correct: 1 },
+            { id: "q3", r: 1, text: "Welche Klimaschutzziele sind im deutschen Bundes-Klimaschutzgesetz festgelegt?", opts: ["A. Mindestens 55 % bis 2030, Neutralität 2050", "B. Mindestens 65 % bis 2030, 88 % bis 2040 und Klimaneutralität bis 2045", "C. Mindestens 80 % bis 2030"], correct: 1 },
             { id: "q4", r: 1, text: "Ein Verwaltungsgebäude verbraucht im Jahr 12.000 kWh Strom. Wie hoch sind die direkten CO₂-Emissionen (Faktor 344 g CO₂/kWh)?", opts: ["A. Etwa 0,41 t CO₂", "B. Etwa 4,13 t CO₂", "C. Etwa 41,3 t CO₂"], correct: 1 },
-            { id: "q5", r: 1, text: "Vergleich 1.000 kWh Erdgas und Strom. Welche Aussage zu CO₂ ist richtig?", opts: ["A. Emissionen sind identisch", "B. Lassen sich nur durch Emissionsfaktoren und Systemgrenzen bestimmen", "C. Strom verursacht grundsätzlich mehr"], correct: 1 },
-            { id: "q6", r: 1, text: "Welcher Kennwert eignet sich, um Energieverbrauch unterschiedlich großer Gebäude zu vergleichen?", opts: ["A. Absoluter Jahresverbrauch", "B. Flächenbezogener Verbrauch (kWh/m²a)", "C. Jährliche Energiekosten"], correct: 1 },
+            { id: "q5", r: 1, text: "Vergleich 1.000 kWh Erdgas und Strom. Welche Aussage ist richtig?", opts: ["A. Emissionen sind identisch", "B. Lassen sich nur durch Emissionsfaktoren und Systemgrenzen bestimmen", "C. Strom verursacht grundsätzlich mehr"], correct: 1 },
+            { id: "q6", r: 1, text: "Welcher Kennwert eignet sich, um Energieverbrauch unterschiedlich großer Gebäude zu vergleichen?", opts: ["A. Absoluter Jahresverbrauch", "B. Flächenbezogener Verbrauch in kWh/m²a", "C. Jährliche Energiekosten"], correct: 1 },
             { id: "q7", r: 2, text: "Welcher Kraftstoff verursacht geringere CO₂-Emissionen pro 100 km? (E10: 7,3 l vs Diesel: 5,4 l)", opts: ["A. E10 ist geringer", "B. Diesel (ca. 14 kg) ist geringer als E10 (ca. 17 kg)", "C. Beide gleich"], correct: 1 },
             { id: "q8", r: 2, text: "Warum lässt sich Klimawirkung von E10 und Diesel nicht allein am CO₂ pro Liter vergleichen?", opts: ["A. Energiegehalt spielt keine Rolle", "B. Vorketten, biogene Bestandteile, realer Verbrauch müssen berücksichtigt werden", "C. Sie verursachen immer denselben Verbrauch"], correct: 1 },
-            { id: "q9", r: 2, text: "Einfluss der Geschwindigkeit auf den Energieverbrauch eines Pkw?", opts: ["A. Steigt linear (Rollwiderstand)", "B. Luftwiderstand steigt stark und wird dominierend", "C. Luftwiderstand spielt oberhalb von 100 km/h kaum eine Rolle"], correct: 1 },
+            { id: "q9", r: 2, text: "Einfluss der Geschwindigkeit auf den Energieverbrauch eines Pkw?", opts: ["A. Steigt linear", "B. Luftwiderstand steigt stark und wird dominierend", "C. Luftwiderstand spielt oberhalb von 100 km/h keine Rolle"], correct: 1 },
             { id: "q10", r: 2, text: "Zwei LED-Leuchten: A (40W, 4000lm) vs B (50W, 4500lm).", opts: ["A. Leuchte A hat höhere Lichtausbeute (100 lm/W)", "B. Leuchte B hat höhere Lichtausbeute", "C. Beide gleich"], correct: 0 },
-            { id: "q11", r: 2, text: "Bewertung einer Beleuchtungssanierung: Was ist sinnvoll?", opts: ["A. Nur Watt und Preis", "B. Lichtstrom, Beleuchtungsstärke, Blendung, Betriebsstunden, Energieverbrauch, etc.", "C. Nur Anzahl und Farbtemperatur"], correct: 1 },
-            { id: "q12", r: 2, text: "Büro von Leuchtstoff auf LED umrüsten. Was ist korrekt?", opts: ["A. LED ist immer geeignet, wenn Leistung geringer ist", "B. Neben Leistung müssen Kompatibilität, Lichtverteilung, Blendung geprüft werden", "C. Beleuchtungsstärke kann vernachlässigt werden"], correct: 1 },
+            { id: "q11", r: 2, text: "Bewertung einer Beleuchtungssanierung: Was ist sinnvoll?", opts: ["A. Nur Watt und Preis", "B. Lichtstrom, Beleuchtungsstärke, Blendung, Betriebsstunden, Energieverbrauch", "C. Nur Anzahl"], correct: 1 },
+            { id: "q12", r: 2, text: "Büro von Leuchtstoff auf LED umrüsten. Was ist korrekt?", opts: ["A. LED ist immer geeignet", "B. Neben Leistung müssen Kompatibilität, Lichtverteilung, Blendung geprüft werden", "C. Beleuchtungsstärke kann vernachlässigt werden"], correct: 1 },
             { id: "q13", r: 3, text: "Welche ISO-Norm beschreibt Anforderungen an ein Energiemanagementsystem?", opts: ["A. ISO 14001", "B. ISO 50001", "C. ISO 27001"], correct: 1 },
-            { id: "q14", r: 3, text: "Was beschreibt der PUE bei Rechenzentren?", opts: ["A. Verhältnis Speicher zu Server", "B. Verhältnis Gesamtenergieverbrauch zu Energieverbrauch der IT-Komponenten", "C. Verhältnis Rechenleistung zu elektrischer Anschlussleistung"], correct: 1 },
+            { id: "q14", r: 3, text: "Was beschreibt der PUE bei Rechenzentren?", opts: ["A. Verhältnis Speicher zu Server", "B. Verhältnis Gesamtenergieverbrauch zu Energieverbrauch der IT-Komponenten", "C. Verhältnis Rechenleistung"], correct: 1 },
             { id: "q15", r: 3, text: "Rechenzentrum Gesamt 1.200 MWh, davon 1.000 MWh IT. PUE-Wert?", opts: ["A. 0,83", "B. 1,20", "C. 2,20"], correct: 1 },
-            { id: "q16", r: 3, text: "Aussagekraft COP bei Kühlsystemen?", opts: ["A. Verhältnis von Kälteleistung zu elektrischer Leistung", "B. Lebensdauer des Verdichters", "C. Verhältnis Anschaffung zu Energiekosten"], correct: 0 },
+            { id: "q16", r: 3, text: "Aussagekraft COP bei Kühlsystemen?", opts: ["A. Verhältnis von Kälteleistung zu elektrischer Leistung", "B. Lebensdauer", "C. Verhältnis Preis zu Kosten"], correct: 0 },
             { id: "q17", r: 3, text: "Laptop vs Desktop: Nachhaltigkeitsbewertung?", opts: ["A. Laptop immer nachhaltiger", "B. Neben Betrieb müssen Herstellung, Nutzungsdauer, Entsorgung betrachtet werden", "C. Desktop immer nachhaltiger"], correct: 1 },
             { id: "q18", r: 3, text: "Maßnahme für längere Arbeitspause am PC?", opts: ["A. Bildschirmschoner", "B. Bildschirm aus, Rechner in Energiesparmodus oder ausschalten", "C. Auflösung erhöhen"], correct: 1 },
-            { id: "q19", r: 4, text: "Was beschreibt der COP einer Wärmepumpe?", opts: ["A. Verhältnis der abgegebenen Wärmeleistung zur elektrischen Leistung", "B. Verhältnis Investitionskosten zu Lebensdauer", "C. Jährliche Veränderung der Heizleistung"], correct: 0 },
-            { id: "q20", r: 4, text: "Wärmepumpe mit COP von 4 bedeutet?", opts: ["A. Benötigt für 4 kWh Wärme 4 kWh Strom", "B. Gibt etwa 4 kWh Wärme je 1 kWh eingesetzter elektrischer Energie ab", "C. Erreicht 400% Einsparung über Lebensdauer"], correct: 1 },
+            { id: "q19", r: 4, text: "Was beschreibt der COP einer Wärmepumpe?", opts: ["A. Verhältnis der abgegebenen Wärmeleistung zur elektrischen Leistung", "B. Verhältnis Investition zu Lebensdauer", "C. Jährliche Veränderung"], correct: 0 },
+            { id: "q20", r: 4, text: "Wärmepumpe mit COP von 4 bedeutet?", opts: ["A. Benötigt für 4 kWh Wärme 4 kWh Strom", "B. Gibt etwa 4 kWh Wärme je 1 kWh eingesetzter elektrischer Energie ab", "C. Erreicht 400% Einsparung"], correct: 1 },
             { id: "q21", r: 4, text: "Welcher Kennwert bewertet Wärmepumpe über ein ganzes Jahr?", opts: ["A. COP eines Prüfpunktes", "B. Jahresarbeitszahl (SCOP)", "C. Nennleistung"], correct: 1 },
-            { id: "q22", r: 4, text: "Aussage zum U-Wert eines Bauteils?", opts: ["A. Hoher U-Wert schützt besonders gut", "B. Niedriger U-Wert bedeutet geringeren Wärmedurchgang", "C. Beschreibt ausschließlich Luftdichtheit"], correct: 1 },
-            { id: "q23", r: 4, text: "Warum nach Dämmung Heizungsanlage überprüfen?", opts: ["A. Höherer Wärmebedarf", "B. Wärmebedarf sinkt -> Vorlauftemperatur / Heizkurve anpassen", "C. Muss mit höherer Temperatur betrieben werden"], correct: 1 },
-            { id: "q24", r: 4, text: "Zusammenspiel Dämmung, Luftdichtheit, Lüftung?", opts: ["A. Macht Lüftung überflüssig", "B. Dichtere Hülle reduziert Wärmeverlust, erfordert aber angepasstes Lüftungskonzept", "C. Dämmung verhindert Feuchtigkeit grundsätzlich"], correct: 1 }
+            { id: "q22", r: 4, text: "Aussage zum U-Wert eines Bauteils?", opts: ["A. Hoher U-Wert schützt gut", "B. Niedriger U-Wert bedeutet geringeren Wärmedurchgang", "C. Nur Luftdichtheit"], correct: 1 },
+            { id: "q23", r: 4, text: "Warum nach Dämmung Heizungsanlage überprüfen?", opts: ["A. Höherer Wärmebedarf", "B. Wärmebedarf sinkt -> Vorlauftemperatur / Heizkurve anpassen", "C. Höhere Vorlauftemperatur nötig"], correct: 1 },
+            { id: "q24", r: 4, text: "Zusammenspiel Dämmung, Luftdichtheit, Lüftung?", opts: ["A. Macht Lüftung überflüssig", "B. Dichtere Hülle reduziert Wärmeverlust, erfordert aber angepasstes Lüftungskonzept", "C. Verhindert Feuchtigkeit grundsätzlich"], correct: 1 }
         ];
 
         const MEASURES = [
@@ -419,7 +391,6 @@
             { id: "F3", r: 4, title: "Dachdämmung erneuern", cost: 88000, saveE: 75000, saveCO2: 18000, bonus: 1900, cat: "daemmung" }
         ];
 
-        // NEU: Startbudget ist jetzt 100.000 € (statt 0 €)
         const INITIAL_TEAM_STATE = {
             budget: 100000, 
             co2Saved: 0, 
@@ -429,14 +400,12 @@
             measuresTaken: {},
             flags: {},
             drawnCards: {},
-            history: []
+            history: [],
+            questionAnswers: {}
         };
 
-        // ----------------------------------------------------
-        // LOKALER STATUS
-        // ----------------------------------------------------
         let currentRole = null; 
-        let globalState = { round: 1, activeQuestion: null, questionTimestamp: 0 };
+        let globalState = { round: 1, activeQuestion: null, questionState: 'hidden', questionStartTime: 0 };
         let teamsState = {
             "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
             "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
@@ -445,16 +414,14 @@
         };
         
         let timerInterval = null;
-        let currentModalQuestionId = null;
-        let currentModalAnswerStatus = false;
 
-        // ----------------------------------------------------
-        // FIREBASE SYNCHRONISATION
-        // ----------------------------------------------------
         db.ref('re-gebaeude/global').on('value', snap => {
             if(snap.val()) {
                 globalState = snap.val();
-                updateUI();
+                handleQuestionModalState(); // Update Question UI based on Global State
+                if(currentRole === "Admin" || (currentRole && currentRole.startsWith("Team"))) {
+                    updateUI(); // Safe to update basic text/grids
+                }
             }
         });
 
@@ -462,9 +429,17 @@
             if(snap.val()) {
                 const serverTeams = snap.val();
                 Object.keys(teamsState).forEach(tk => {
-                    if(serverTeams[tk]) teamsState[tk] = serverTeams[tk];
+                    if(serverTeams[tk]) {
+                        teamsState[tk] = serverTeams[tk];
+                        // Failsafe für alte Datenbankstände
+                        if (teamsState[tk].budget === undefined || isNaN(teamsState[tk].budget)) {
+                            teamsState[tk].budget = 100000;
+                        }
+                    }
                 });
-                updateUI();
+                if(currentRole === "Admin" || (currentRole && currentRole.startsWith("Team"))) {
+                    updateUI();
+                }
             }
         });
 
@@ -472,14 +447,10 @@
         function pushTeam(teamName) { db.ref('re-gebaeude/teams/' + teamName).set(teamsState[teamName]); }
         function pushAllTeams() { db.ref('re-gebaeude/teams').set(teamsState); }
 
-        // ----------------------------------------------------
-        // LOGIN & ANSICHTEN
-        // ----------------------------------------------------
         function loginAs(teamName) {
             currentRole = teamName;
             document.getElementById('headerRole').innerText = "Angemeldet als: " + teamName;
             document.getElementById('dashTeamName').innerText = teamName + " - Dashboard";
-            
             document.getElementById('view-login').classList.add('hidden');
             document.getElementById('visual-board-container').classList.remove('hidden');
             document.getElementById('view-team').classList.remove('hidden');
@@ -505,16 +476,12 @@
             }
         }
 
-        // ----------------------------------------------------
-        // HAUPT-UI UPDATE SCHLEIFE
-        // ----------------------------------------------------
         function updateUI() {
             document.getElementById('headerRoundInfo').classList.remove('hidden');
             document.getElementById('roundDisplay').innerText = "Runde " + globalState.round;
             document.getElementById('uiRoundNum').innerText = globalState.round;
 
             renderVisualBoard();
-            handleQuestionModal();
 
             if(currentRole && currentRole.startsWith("Team")) {
                 renderTeamDashboard();
@@ -524,9 +491,6 @@
             }
         }
 
-        // ----------------------------------------------------
-        // VISUELLES SPIELFELD (Snake-Path Zick-Zack behoben)
-        // ----------------------------------------------------
         function renderVisualBoard() {
             const grid = document.getElementById('board-grid');
             grid.innerHTML = "";
@@ -551,12 +515,11 @@
                     icon = spec.icon;
                 }
 
-                // Echtes Schlangen-Muster berechnen
-                let row = Math.floor((i - 1) / 10) + 1; // 1 bis 4
-                let col = (i - 1) % 10 + 1; // 1 bis 10
-                if (row % 2 === 0) col = 11 - col; // Bei geraden Reihen von rechts nach links
+                // Echte Schlangenlinie (Snake-Path)
+                let row = Math.floor((i - 1) / 10) + 1;
+                let col = (i - 1) % 10 + 1;
+                if (row % 2 === 0) col = 11 - col;
 
-                // Teams auf diesem Feld ermitteln
                 let pawnsHere = [];
                 Object.keys(teamsState).forEach(tName => {
                     if (teamsState[tName].position === i) {
@@ -569,7 +532,7 @@
                 grid.innerHTML += `
                     <div class="board-field ${fieldBg}" style="grid-column: ${col}; grid-row: ${row};">
                         <div class="flex w-full justify-between items-center text-[11px] opacity-90 px-1 pt-1">
-                            <span class="font-black text-gray-400">${i}</span>
+                            <span class="font-black text-gray-500">${i}</span>
                             <span class="text-sm">${icon}</span>
                         </div>
                         <div class="pawn-container p-1">
@@ -581,9 +544,6 @@
             }
         }
 
-        // ----------------------------------------------------
-        // TEAM LOGIK (Energiebilanz, Dashboard, Ereignisse)
-        // ----------------------------------------------------
         function renderTeamDashboard() {
             const tState = teamsState[currentRole];
             document.getElementById('t-budget').innerText = new Intl.NumberFormat('de-DE').format(tState.budget) + " €";
@@ -597,12 +557,11 @@
                 tool.classList.add('hidden');
             }
 
-            // Prüfen ob Team auf Ereignisfeld steht
+            // Check für manuelle Board-Karten
             const fieldAction = document.getElementById('field-action-container');
             const spec = SPECIAL_FIELDS[tState.position];
             
             if (spec && tState.balanceDone) {
-                // Wenn wir auf dem Feld noch nicht gezogen haben
                 if (!tState.drawnCards || !tState.drawnCards[tState.position]) {
                     fieldAction.classList.remove('hidden');
                     document.getElementById('field-action-title').innerText = `Du stehst auf einem ${spec.label}-Feld!`;
@@ -614,31 +573,6 @@
             }
         }
 
-        function drawBoardCard() {
-            const tState = teamsState[currentRole];
-            if (!tState.drawnCards) tState.drawnCards = {};
-            
-            tState.history.push(JSON.stringify(tState));
-            tState.drawnCards[tState.position] = true;
-            
-            // Zufällige Karte ziehen
-            const randIndex = Math.floor(Math.random() * RANDOM_CARDS.length);
-            const card = RANDOM_CARDS[randIndex];
-            
-            let msg = `KARTENTEXT:\n"${card.text}"\n\nAUSWIRKUNG:\n`;
-            if (card.effect !== 0) {
-                tState.position += card.effect;
-                msg += `${card.effect > 0 ? '+' : ''}${card.effect} Felder `;
-            }
-            if (card.budgetAdd) {
-                tState.budget += card.budgetAdd;
-                msg += `${card.budgetAdd > 0 ? '+' : ''}${card.budgetAdd} € `;
-            }
-            
-            pushTeam(currentRole);
-            alert(msg);
-        }
-
         function submitEnergyBalance() {
             const stromVal = parseInt(document.getElementById('eb-strom').value) || 0;
             const gasVal = parseInt(document.getElementById('eb-gas').value) || 0;
@@ -647,13 +581,12 @@
             if(stromVal === 219000 && gasVal === 415000 && dieselVal === 368000) {
                 const tState = teamsState[currentRole];
                 tState.history.push(JSON.stringify(tState));
-                
                 tState.balanceDone = true;
-                tState.position += 3; // +3 Felder Bonus
+                tState.position += 3;
                 pushTeam(currentRole);
-                alert("Energiebilanz erfolgreich erstellt (Werte sind korrekt)! Ihr rückt 3 Felder vor und könnt nun eure Maßnahmen wählen.");
+                alert("Energiebilanz erfolgreich erstellt! Ihr rückt 3 Felder vor.");
             } else {
-                alert("Die Energiebilanz stimmt nicht. Bitte prüft eure Startwerte für Strom, Erdgas und Diesel nochmal ganz genau!");
+                alert("Die Werte stimmen nicht. Bitte prüft Strom (219.000), Erdgas (415.000) und Diesel (368.000)!");
             }
         }
 
@@ -666,9 +599,9 @@
             
             let infoText = "";
             if (globalState.round === 1) infoText = `Vorbeugende Maßnahmen`;
-            if (globalState.round === 2) infoText = `Fuhrpark & Beleuchtung (Pflicht: mind. 1x Fuhrpark, 1x Licht!)`;
-            if (globalState.round === 3) infoText = `IKT. Sonderbudget: 6.000 € (nur für diese Runde!)`;
-            if (globalState.round === 4) infoText = `Heizung & Dämmung (Pflicht: mind. 1x Heizung, 1x Dämmung!)`;
+            if (globalState.round === 2) infoText = `Fuhrpark & Beleuchtung (mind. 1x Fuhrpark, 1x Licht)`;
+            if (globalState.round === 3) infoText = `IKT. Sonderbudget: 6.000 €`;
+            if (globalState.round === 4) infoText = `Heizung & Dämmung (mind. 1x Heizung, 1x Dämmung)`;
             
             document.getElementById('t-roundRules').innerText = infoText;
             document.getElementById('t-budgetInfo').innerText = `Verfügbar: ${new Intl.NumberFormat('de-DE').format(availableBudget)} €`;
@@ -678,16 +611,13 @@
 
             let chosenThisRoundCount = 0;
             Object.keys(tState.measuresTaken).forEach(k => {
-                if(tState.measuresTaken[k] === globalState.round) {
-                    chosenThisRoundCount++;
-                }
+                if(tState.measuresTaken[k] === globalState.round) chosenThisRoundCount++;
             });
 
             document.getElementById('t-measuresLeft').innerText = `Gewählt: ${chosenThisRoundCount} / 3`;
 
             availableMeasures.forEach(measure => {
                 const isTaken = !!tState.measuresTaken[measure.id];
-                
                 let realCost = measure.cost;
                 let realSaveE = measure.saveE;
                 let realSaveCO2 = measure.saveCO2;
@@ -700,18 +630,13 @@
 
                 const canAfford = availableBudget >= realCost;
                 const canChooseMore = chosenThisRoundCount < 3;
-                
                 let cardClass = "bg-white card cursor-pointer border-2 border-gray-100";
                 
-                if(isTaken) {
-                    cardClass = "active-card";
-                } else if(!canAfford || !canChooseMore || !tState.balanceDone) {
-                    cardClass = "bg-gray-50 disabled-card";
-                }
+                if(isTaken) cardClass = "active-card";
+                else if(!canAfford || !canChooseMore || !tState.balanceDone) cardClass = "bg-gray-50 disabled-card";
 
                 grid.innerHTML += `
-                    <div class="rounded-xl p-5 flex flex-col justify-between h-full shadow-sm ${cardClass}" 
-                         onclick="buyMeasure('${measure.id}')">
+                    <div class="rounded-xl p-5 flex flex-col justify-between h-full shadow-sm ${cardClass}" onclick="buyMeasure('${measure.id}')">
                         <div>
                             <div class="flex justify-between items-start mb-2">
                                 <span class="text-xs font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-1 rounded">${measure.cat}</span>
@@ -720,17 +645,8 @@
                             <h3 class="font-bold text-lg leading-tight mb-4 text-gray-800">${measure.title}</h3>
                         </div>
                         <div class="space-y-2 mt-auto border-t pt-3">
-                            <div class="flex justify-between text-sm items-center">
-                                <span class="text-gray-600">Investition:</span> 
-                                <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">${new Intl.NumberFormat('de-DE').format(realCost)} €</span>
-                            </div>
-                            <div class="flex justify-between text-sm items-center">
-                                <span class="text-gray-600">Ersparnis/Jahr:</span> 
-                                <div class="text-right">
-                                    <span class="font-bold text-ecoGreen block">-${new Intl.NumberFormat('de-DE').format(realSaveE)} kWh</span>
-                                    <span class="font-bold text-gray-700 block">-${new Intl.NumberFormat('de-DE').format(realSaveCO2)} kg CO₂</span>
-                                </div>
-                            </div>
+                            <div class="flex justify-between text-sm items-center"><span class="text-gray-600">Investition:</span> <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">${new Intl.NumberFormat('de-DE').format(realCost)} €</span></div>
+                            <div class="flex justify-between text-sm items-center"><span class="text-gray-600">Ersparnis/Jahr:</span> <div class="text-right"><span class="font-bold text-ecoGreen block">-${new Intl.NumberFormat('de-DE').format(realSaveE)} kWh</span><span class="font-bold text-gray-700 block">-${new Intl.NumberFormat('de-DE').format(realSaveCO2)} kg CO₂</span></div></div>
                         </div>
                     </div>
                 `;
@@ -764,169 +680,258 @@
                 realSaveE -= measure.penaltyE || 0;
                 realSaveCO2 -= measure.penaltyCO2 || 0;
                 realBonus -= measure.penaltyBonus || 0;
-                alert("Achtung! Da euch das entsprechende Konzept aus Runde 1 fehlt, ist diese Maßnahme teurer / weniger effizient.");
+                alert("Achtung! Das Konzept aus Runde 1 fehlt, daher Mehrkosten / geringere Ersparnis.");
             }
 
             let availableBudget = globalState.round === 3 ? 6000 : tState.budget;
 
             if (availableBudget >= realCost) {
                 tState.history.push(JSON.stringify(tState));
-                
-                if(globalState.round !== 3) {
-                    tState.budget -= realCost;
-                }
-                
+                if(globalState.round !== 3) tState.budget -= realCost;
                 if(measure.flags) tState.flags[measure.flags] = true;
 
                 tState.budget += realBonus; 
                 tState.energySaved += realSaveE;
                 tState.co2Saved += realSaveCO2;
                 tState.measuresTaken[id] = globalState.round;
-                
                 pushTeam(currentRole);
             } else {
                 alert("Nicht genügend Budget!");
             }
         }
 
-        // ----------------------------------------------------
-        // FRAGEN LOGIK (Bugfix: Timer wird nicht mehr überschrieben)
-        // ----------------------------------------------------
-        function handleQuestionModal() {
-            const modal = document.getElementById('questionModal');
-            
-            if (globalState.activeQuestion) {
-                modal.classList.remove('hidden');
-                
-                const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
-                if(!q) return;
-
-                const tState = (currentRole && currentRole.startsWith("Team")) ? teamsState[currentRole] : null;
-                const currentHasAnswered = tState ? (tState.answeredQuestion === q.id) : false;
-
-                // WICHTIG: Nur neu zeichnen, wenn sich Frage oder Antwort-Status WIRKLICH geändert haben
-                if (currentModalQuestionId !== q.id || currentModalAnswerStatus !== currentHasAnswered) {
-                    currentModalQuestionId = q.id;
-                    currentModalAnswerStatus = currentHasAnswered;
-
-                    document.getElementById('qm-title').innerText = `Seminar-Fragerunde (Runde ${q.r})`;
-                    document.getElementById('qm-text').innerText = q.text;
-                    
-                    const optsDiv = document.getElementById('qm-options');
-                    optsDiv.innerHTML = '';
-                    document.getElementById('qm-feedback').classList.add('hidden');
-                    document.getElementById('qm-close-btn').classList.add('hidden');
-                    
-                    // Timer frisch starten
-                    if(timerInterval) clearInterval(timerInterval);
-                    timerInterval = setInterval(updateModalTimer, 1000);
-                    updateModalTimer(); // Sofortiger Aufruf
-                    
-                    if(currentRole === "Admin") {
-                        optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Die Teams sehen diese Frage gerade. 60s Timer läuft...</p>
-                                             <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">
-                                                Lösung: ${q.opts[q.correct]}
-                                             </div>`;
-                        document.getElementById('qm-close-btn').classList.remove('hidden');
-                    } else {
-                        if (currentHasAnswered) {
-                            showFeedback(tState.lastAnswerCorrect, tState.lastAnswerCorrect ? "Ihr hattet recht! 1 Feld vor." : "Das war falsch. Kein Feld vor.");
-                        } else {
-                            q.opts.forEach((opt, index) => {
-                                optsDiv.innerHTML += `<button onclick="answerQuestion('${q.id}', ${index}, ${q.correct})" class="bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold py-4 px-6 rounded-lg border-2 border-gray-200 text-left transition shadow-sm text-lg">${opt}</button>`;
-                            });
-                        }
-                    }
-                }
-            } else {
-                modal.classList.add('hidden');
-                if(timerInterval) clearInterval(timerInterval);
-                currentModalQuestionId = null;
-                currentModalAnswerStatus = false;
-            }
-        }
-
-        function updateModalTimer() {
-            let elapsed = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
-            let timeLeft = Math.max(0, 60 - elapsed);
-            
-            document.getElementById('q-timer-text').innerText = timeLeft;
-            document.getElementById('q-timer-bar').style.width = (timeLeft/60)*100 + "%";
-            
-            if(timeLeft <= 0) {
-                clearInterval(timerInterval);
-                if(currentRole !== "Admin" && !currentModalAnswerStatus) {
-                    showFeedback(false, "Zeit abgelaufen! Leider kein Feld vorgerückt.");
-                }
-            }
-        }
-
-        // ACHTUNG: Aufruf aus dem HTML onclick!
-        window.answerQuestion = function(qId, selectedIndex, correctIndex) {
-            const isCorrect = (selectedIndex === correctIndex);
+        // ==========================================================
+        // EREIGNIS- UND TEAMKARTEN (Unabhängig von Seminarfragen)
+        // ==========================================================
+        function drawBoardCard() {
             const tState = teamsState[currentRole];
+            if (!tState.drawnCards) tState.drawnCards = {};
+            const spec = SPECIAL_FIELDS[tState.position];
             
             tState.history.push(JSON.stringify(tState));
-            tState.answeredQuestion = qId;
-            tState.lastAnswerCorrect = isCorrect;
+            tState.drawnCards[tState.position] = true;
             
-            if(isCorrect) {
-                tState.position += 1; 
+            let card;
+            let title, text, effectText, colorClass, icon;
+
+            if (spec.type === 'ereignis') {
+                // Rote Ereigniskarte
+                card = EREIGNIS_KARTEN[Math.floor(Math.random() * EREIGNIS_KARTEN.length)];
+                title = "Ereignis: " + card.title;
+                text = card.text;
+                effectText = card.effect;
+                colorClass = "border-red-600";
+                icon = "⭐";
+                
+                if (card.change) tState.position += card.change;
+                if (card.budget) tState.budget += card.budget;
+
+            } else {
+                // Lila Teamkarte - Intelligente Prüfung
+                card = TEAM_KARTEN[Math.floor(Math.random() * TEAM_KARTEN.length)];
+                title = "Teamkarte: " + card.title;
+                text = card.text;
+                colorClass = "border-purple-600";
+                icon = "🤝";
+
+                if (card.isManual) {
+                    // Trainer muss auflösen
+                    effectText = "Diskutiert die Antwort. Wenn richtig: +1 Feld vor. Wenn falsch: -1 Feld zurück. Klickt anschließend auf Schließen.";
+                    // Info: Wir überlassen das Vorrücken bei manuellen Karten dem Spieler oder Admin (hier zur Vereinfachung automatisiert nach Klick)
+                    // Für einen perfekten Spielfluss addieren wir manuell nichts, der Admin kann ggf. im Dashboard korrigieren.
+                } else {
+                    // Automatische Prüfung der gekauften Maßnahmen
+                    let hasReq = false;
+                    if (card.checkReq === "C2_or_C3") {
+                        hasReq = tState.measuresTaken["C2"] || tState.measuresTaken["C3"];
+                    } else {
+                        hasReq = tState.measuresTaken[card.checkReq];
+                    }
+
+                    if (hasReq) {
+                        effectText = card.effectOk;
+                        tState.position += card.ok;
+                    } else {
+                        effectText = card.effectFail;
+                        tState.position += card.fail;
+                    }
+                }
             }
+            
             pushTeam(currentRole);
-            // Modal zeichnet sich durch das `pushTeam` (und den folgenden Sync) automatisch neu.
+
+            // Pop-Up anzeigen (lokal, wird nicht von Firebase geschlossen)
+            document.getElementById('cm-border').className = `bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-lg w-full text-center border-t-8 ${colorClass}`;
+            document.getElementById('cm-icon').innerText = icon;
+            document.getElementById('cm-title').innerText = title;
+            document.getElementById('cm-text').innerText = text;
+            document.getElementById('cm-effect').innerText = effectText;
+            document.getElementById('cardModal').classList.remove('hidden');
         }
 
-        function showFeedback(isCorrect, text) {
-            document.getElementById('qm-options').innerHTML = '';
-            const fb = document.getElementById('qm-feedback');
-            fb.classList.remove('hidden');
-            fb.innerText = text;
-            if(isCorrect) {
-                fb.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-green-100 text-green-700 border-2 border-green-500";
-            } else {
-                fb.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-red-100 text-red-700 border-2 border-red-500";
-            }
-            document.getElementById('qm-close-btn').classList.remove('hidden');
+        window.closeCardModal = function() {
+            document.getElementById('cardModal').classList.add('hidden');
         }
 
-        window.closeModalLocally = function() {
-            if (currentRole === "Admin") {
-                adminHideQuestion();
-            } else {
-                document.getElementById('questionModal').classList.add('hidden');
-            }
-        }
-
-        // ----------------------------------------------------
-        // ADMIN LOGIK
-        // ----------------------------------------------------
-        window.adminSetRound = function(r) {
-            if(confirm(`Möchtest du wirklich Runde ${r} für alle Teams starten?`)) {
-                globalState.round = r;
-                pushGlobal();
-            }
-        }
-
-        window.adminShowQuestion = function() {
-            globalState.activeQuestion = document.getElementById('adminQuestionSelect').value;
-            globalState.questionTimestamp = Date.now();
+        // ==========================================================
+        // SEMINAR-FRAGERUNDE (Strikt Admin gesteuert)
+        // ==========================================================
+        window.adminStartQuestion = function() {
+            const qId = document.getElementById('adminQuestionSelect').value;
+            if(!qId) return;
+            globalState.activeQuestion = qId;
+            globalState.questionStartTime = Date.now();
+            globalState.questionState = 'active'; // Status: Timer läuft
             
+            // Antworten der Teams zurücksetzen
             Object.keys(teamsState).forEach(tk => {
-                teamsState[tk].answeredQuestion = null;
+                if(!teamsState[tk].questionAnswers) teamsState[tk].questionAnswers = {};
+                teamsState[tk].questionAnswers[qId] = null;
             });
             pushAllTeams();
             pushGlobal();
         }
 
-        window.adminHideQuestion = function() {
-            globalState.activeQuestion = null;
+        window.adminResolveQuestion = function() {
+            if(globalState.questionState !== 'active') return alert("Es läuft keine aktive Frage.");
+            globalState.questionState = 'resolved'; // Status: Eingefroren, Lösung anzeigen
+            
+            // Auswerten und Vorrücken
+            const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
+            if(q) {
+                Object.keys(teamsState).forEach(tk => {
+                    const ans = teamsState[tk].questionAnswers[q.id];
+                    if(ans !== null && ans !== undefined) {
+                        if(ans === q.correct) {
+                            teamsState[tk].history.push(JSON.stringify(teamsState[tk]));
+                            teamsState[tk].position += 1; // Richtig beantwortet -> +1 Feld
+                        }
+                    }
+                });
+                pushAllTeams();
+            }
             pushGlobal();
         }
 
-        window.adminEvalRanking = function() {
-            if(!confirm("Jetzt Ranking auswerten? Teams mit meister Einsparung (CO2 + Energie) rücken 4, 3, 2, 1 Felder vor.")) return;
+        window.adminCloseQuestion = function() {
+            globalState.questionState = 'hidden';
+            pushGlobal();
+        }
+
+        // UI Updates für das Fragen-Modal basierend auf GlobalState
+        function handleQuestionModalState() {
+            const modal = document.getElementById('questionModal');
             
+            if (globalState.questionState === 'hidden' || !globalState.activeQuestion) {
+                modal.classList.add('hidden');
+                if(timerInterval) clearInterval(timerInterval);
+                return;
+            }
+
+            // Modal anzeigen
+            modal.classList.remove('hidden');
+            const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
+            if(!q) return;
+
+            document.getElementById('qm-title').innerText = `Seminar-Fragerunde (Runde ${q.r})`;
+            document.getElementById('qm-text').innerText = q.text;
+            
+            const optsDiv = document.getElementById('qm-options');
+            const fbDiv = document.getElementById('qm-feedback');
+
+            // TIMER LOGIK
+            if(timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimerUI, 200);
+            updateTimerUI();
+
+            // RENDER OPTIONS
+            if(currentRole === "Admin") {
+                optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Teams antworten. Korrekte Lösung für dich:</p>
+                                     <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">${q.opts[q.correct]}</div>`;
+                fbDiv.classList.add('hidden');
+            } else {
+                optsDiv.innerHTML = '';
+                const tState = teamsState[currentRole];
+                let myAnswer = tState && tState.questionAnswers ? tState.questionAnswers[q.id] : null;
+
+                q.opts.forEach((opt, index) => {
+                    let btnClass = "bg-gray-50 hover:bg-gray-100 text-gray-800 border-2 border-gray-200";
+                    let disabled = false;
+
+                    // Wenn Timer läuft, aber ich habe schon geantwortet
+                    if(myAnswer !== null && myAnswer !== undefined) {
+                        disabled = true;
+                        if(myAnswer === index) btnClass = "bg-blue-100 border-blue-500 text-blue-800 font-bold";
+                        else btnClass = "bg-gray-50 opacity-50";
+                    }
+
+                    // Wenn Admin aufgelöst hat
+                    if(globalState.questionState === 'resolved') {
+                        disabled = true;
+                        if(index === q.correct) btnClass = "bg-green-100 border-green-500 text-green-800 font-bold shadow-md";
+                        else if(myAnswer === index && index !== q.correct) btnClass = "bg-red-100 border-red-500 text-red-800";
+                        else btnClass = "bg-gray-50 opacity-50";
+                    }
+
+                    optsDiv.innerHTML += `<button ${disabled ? 'disabled' : ''} onclick="answerQuestion('${q.id}', ${index})" class="${btnClass} py-4 px-6 rounded-lg text-left transition shadow-sm text-lg">${opt}</button>`;
+                });
+
+                // Feedback Banner unten
+                if(globalState.questionState === 'resolved') {
+                    fbDiv.classList.remove('hidden');
+                    if(myAnswer === q.correct) {
+                        fbDiv.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-green-100 text-green-700 border-2 border-green-500";
+                        fbDiv.innerText = "Richtig! Ihr dürft 1 Feld vorrücken.";
+                    } else {
+                        fbDiv.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-red-100 text-red-700 border-2 border-red-500";
+                        fbDiv.innerText = "Leider falsch.";
+                    }
+                } else {
+                    fbDiv.classList.add('hidden');
+                }
+            }
+        }
+
+        function updateTimerUI() {
+            if(globalState.questionState !== 'active') return;
+            let elapsed = Math.floor((Date.now() - globalState.questionStartTime) / 1000);
+            let timeLeft = Math.max(0, 60 - elapsed);
+            
+            document.getElementById('q-timer-text').innerText = timeLeft;
+            document.getElementById('q-timer-bar').style.width = (timeLeft/60)*100 + "%";
+            
+            // Wenn Zeit abgelaufen, lokal das Klicken verhindern (Admin löst manuell auf)
+            if(timeLeft <= 0) {
+                document.getElementById('q-timer-text').innerText = "0";
+                document.getElementById('q-timer-bar').style.width = "0%";
+            }
+        }
+
+        window.answerQuestion = function(qId, selectedIndex) {
+            let elapsed = Math.floor((Date.now() - globalState.questionStartTime) / 1000);
+            if (elapsed > 60) return alert("Die Zeit ist abgelaufen!");
+            if (globalState.questionState !== 'active') return;
+
+            const tState = teamsState[currentRole];
+            if(!tState.questionAnswers) tState.questionAnswers = {};
+            
+            tState.questionAnswers[qId] = selectedIndex;
+            pushTeam(currentRole);
+            // Firebase Update triggert handleQuestionModalState und markiert den Button blau.
+        }
+
+        // ==========================================================
+        // ADMIN STEUERUNG - RUNDEN & RESET
+        // ==========================================================
+        window.adminSetRound = function(r) {
+            if(confirm(`Runde ${r} für alle starten?`)) {
+                globalState.round = r;
+                pushGlobal();
+            }
+        }
+
+        window.adminEvalRanking = function() {
+            if(!confirm("Ranking auswerten? Das Team mit der höchsten Einsparung rückt 4 Felder vor, das 2. rückt 3 vor, etc.")) return;
             let scores = [];
             Object.keys(teamsState).forEach(t => {
                 scores.push({ name: t, score: teamsState[t].energySaved + teamsState[t].co2Saved });
@@ -940,25 +945,12 @@
                 teamsState[tName].position += (rewards[index] || 0);
             });
             pushAllTeams();
-            alert("Erfolgreich! Die Teams wurden entsprechend ihrer Platzierung auf dem Spielfeld vorgerückt.");
-        }
-
-        window.adminUndo = function(teamName) {
-            const tState = teamsState[teamName];
-            if(tState.history && tState.history.length > 0) {
-                if(confirm(`Letzte Aktion von ${teamName} wirklich rückgängig machen?`)) {
-                    const previousStateStr = tState.history.pop();
-                    teamsState[teamName] = JSON.parse(previousStateStr);
-                    pushTeam(teamName);
-                }
-            } else {
-                alert(`Keine Historie für ${teamName} vorhanden.`);
-            }
+            alert("Ranking erfolgreich ausgewertet und Teams vorgerückt!");
         }
 
         window.resetGame = function() {
-            if(confirm("ACHTUNG! Dies setzt das komplette Spiel für alle Teams unwiderruflich auf Null zurück. Sicher?")) {
-                globalState = { round: 1, activeQuestion: null, questionTimestamp: 0 };
+            if(confirm("Spiel komplett zurücksetzen?")) {
+                globalState = { round: 1, activeQuestion: null, questionState: 'hidden', questionStartTime: 0 };
                 teamsState = {
                     "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
                     "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
@@ -967,6 +959,40 @@
                 };
                 pushGlobal();
                 pushAllTeams();
+                alert("Alles zurückgesetzt. Die Teams können sich neu einloggen.");
+            }
+        }
+
+        function renderAdminTeams() {
+            const grid = document.getElementById('adminTeamsGrid');
+            grid.innerHTML = "";
+            Object.keys(teamsState).forEach(tName => {
+                const ts = teamsState[tName];
+                // Failsafe falls undefined
+                const budgetDisp = ts.budget !== undefined ? ts.budget : 0;
+                grid.innerHTML += `
+                    <div class="bg-gray-50 border rounded-xl p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <h4 class="font-bold text-lg mb-2 text-gray-800">${tName}</h4>
+                            <p class="text-sm">Position: <strong class="text-blue-600">Feld ${ts.position}</strong></p>
+                            <p class="text-sm">Budget: <strong class="text-emerald-600">${new Intl.NumberFormat('de-DE').format(budgetDisp)} €</strong></p>
+                            <p class="text-sm">CO₂-Einsparung: <strong>${new Intl.NumberFormat('de-DE').format(ts.co2Saved)} kg/a</strong></p>
+                        </div>
+                        <button onclick="adminUndo('${tName}')" class="mt-4 bg-amber-100 text-amber-800 hover:bg-amber-200 font-bold py-2 rounded text-xs transition border border-amber-300">Letzten Schritt rückgängig</button>
+                    </div>
+                `;
+            });
+        }
+
+        window.adminUndo = function(teamName) {
+            const tState = teamsState[teamName];
+            if(tState.history && tState.history.length > 0) {
+                if(confirm(`Letzten Schritt von ${teamName} rückgängig machen?`)) {
+                    teamsState[teamName] = JSON.parse(tState.history.pop());
+                    pushTeam(teamName);
+                }
+            } else {
+                alert("Keine Historie vorhanden.");
             }
         }
     </script>
