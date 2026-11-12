@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RE:GEBÄUDE - Planspiel</title>
-    <!-- Tailwind CSS für das visuelle Design (Thema: Energieeffizienz/Nachhaltigkeit) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase SDK (Version 8 für einfache Integration ohne Build-Tools) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     
@@ -14,98 +12,290 @@
         tailwind.config = {
             theme: {
                 extend: {
-                    colors: {
-                        ecoGreen: '#2E7D32',
-                        ecoLight: '#81C784',
-                        ecoAlert: '#D32F2F'
-                    }
+                    colors: { ecoGreen: '#2E7D32', ecoLight: '#81C784', ecoYellow: '#FBC02D' }
                 }
             }
         }
     </script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0fdf4; }
-        .card:hover { transform: translateY(-5px); transition: all 0.3s ease; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f0fdf4; }
+        .card { transition: all 0.2s ease; }
+        .card:hover:not(.disabled-card) { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .disabled-card { opacity: 0.5; filter: grayscale(100%); pointer-events: none; }
+        .active-card { border: 4px solid #2E7D32; background-color: #e8f5e9; }
+        .modal-bg { background-color: rgba(0,0,0,0.6); }
+        .timer-bar { transition: width 1s linear; }
+
+        /* Zick-Zack Brettspiel-Layout */
+        .board-container {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 6px;
+            padding: 10px;
+            background-color: #f8fafc;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+        .board-field {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px;
+            border-radius: 8px;
+            font-size: 10px;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+            border: 2px solid transparent;
+        }
+        .pawn-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            width: 100%;
+        }
+        .pawn-badge {
+            font-size: 11px;
+            font-weight: 900;
+            width: 22px;
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
+            border: 2px solid white;
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
     </style>
 </head>
-<body class="text-gray-800">
+<body class="text-gray-800 h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-ecoGreen text-white p-6 shadow-md">
+    <header class="bg-ecoGreen text-white p-4 shadow-md sticky top-0 z-50 flex-shrink-0">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 class="text-3xl font-bold">RE:GEBÄUDE</h1>
-            <p class="text-lg opacity-80">Energieeffizienz in Verwaltungsgebäuden - Multiplayer</p>
+            <div>
+                <h1 class="text-2xl font-bold tracking-wider">RE:GEBÄUDE</h1>
+                <p class="text-sm opacity-90" id="headerRole">Energieeffizienz in Verwaltungsgebäuden</p>
+            </div>
+            <div id="headerRoundInfo" class="hidden text-right flex items-center gap-3">
+                <span class="bg-white text-ecoGreen font-bold px-4 py-1.5 rounded-full text-sm shadow-inner" id="roundDisplay">Runde 1</span>
+            </div>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <main class="flex-grow overflow-auto p-4 md:p-6" id="app">
         
-        <!-- Linke Spalte: Dashboard & Info -->
-        <div class="lg:col-span-1 space-y-6">
+        <!-- ================= STARTBILDSCHIRM (LOGIN) ================= -->
+        <div id="view-login" class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8 mt-10 text-center border-t-4 border-ecoGreen">
+            <h2 class="text-3xl font-bold mb-6 text-gray-800">Willkommen zum Planspiel</h2>
+            <p class="mb-8 text-gray-600 text-lg">Bitte wähle dein Team aus oder logge dich als Spielleitung ein.</p>
             
-            <!-- Dashboard -->
-            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-ecoGreen">
-                <h2 class="text-2xl font-bold mb-4 border-b pb-2">Live Dashboard</h2>
-                
-                <div class="mb-4">
-                    <p class="text-sm text-gray-500 uppercase font-bold">Budget (Spielchips)</p>
-                    <p id="budgetDisplay" class="text-4xl font-black text-blue-600">100 🪙</p>
-                </div>
-
-                <div class="mb-4">
-                    <p class="text-sm text-gray-500 uppercase font-bold">CO2-Ausstoß (Chips)</p>
-                    <p id="co2Display" class="text-4xl font-black text-ecoAlert">100 ☁️</p>
-                </div>
-
-                <button onclick="resetGame()" class="mt-4 w-full bg-red-100 text-red-700 font-bold py-2 rounded hover:bg-red-200 transition">
-                    Spiel zurücksetzen (Trainer)
+            <div class="grid grid-cols-2 gap-4 mb-10">
+                <button onclick="loginAs('Team 1')" class="bg-blue-600 text-white font-bold py-4 rounded-lg hover:bg-blue-700 transition text-xl shadow flex items-center justify-center gap-2">
+                    Team 1
+                </button>
+                <button onclick="loginAs('Team 2')" class="bg-emerald-600 text-white font-bold py-4 rounded-lg hover:bg-emerald-700 transition text-xl shadow flex items-center justify-center gap-2">
+                    Team 2
+                </button>
+                <button onclick="loginAs('Team 3')" class="bg-amber-500 text-white font-bold py-4 rounded-lg hover:bg-amber-600 transition text-xl shadow flex items-center justify-center gap-2">
+                    Team 3
+                </button>
+                <button onclick="loginAs('Team 4')" class="bg-purple-600 text-white font-bold py-4 rounded-lg hover:bg-purple-700 transition text-xl shadow flex items-center justify-center gap-2">
+                    Team 4
                 </button>
             </div>
 
-            <!-- Referenzwerte (Tabelle 7.1 & 7.3) -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-lg font-bold mb-2">Referenzwerte (Tab 7.1 & 7.3)</h3>
-                <div class="text-sm space-y-2">
-                    <div class="flex justify-between border-b pb-1"><span>Strompreis:</span> <span class="font-mono">0,25 € / kWh</span></div>
-                    <div class="flex justify-between border-b pb-1"><span>Gaspreis:</span> <span class="font-mono">0,06 € / kWh</span></div>
-                    <div class="flex justify-between border-b pb-1"><span>Dieselpreis:</span> <span class="font-mono">1,30 € / l</span></div>
-                    <div class="flex justify-between border-b pb-1 text-gray-500 mt-2"><span>Strom CO2:</span> <span class="font-mono">474 g / kWh</span></div>
-                    <div class="flex justify-between border-b pb-1 text-gray-500"><span>Gas CO2:</span> <span class="font-mono">202 g / kWh</span></div>
-                    <div class="flex justify-between text-gray-500"><span>Diesel CO2:</span> <span class="font-mono">266 g / kWh</span></div>
+            <div class="border-t pt-8 bg-gray-50 rounded-b-xl -mx-8 -mb-8 pb-8">
+                <p class="text-sm text-gray-500 mb-3 font-bold uppercase tracking-wide">Nur für Spielleitung (Admin)</p>
+                <div class="flex justify-center gap-2">
+                    <input type="password" id="adminPassword" placeholder="Passwort" class="border p-2 rounded w-48 text-center shadow-inner">
+                    <button onclick="loginAsAdmin()" class="bg-gray-800 text-white font-bold py-2 px-6 rounded hover:bg-gray-900 transition shadow">Login</button>
                 </div>
-            </div>
-
-            <!-- Spieler-Lobby -->
-            <div class="bg-white rounded-xl shadow-lg p-6">
-                <h3 class="text-lg font-bold mb-2">Spieler (Seminar-Gruppe)</h3>
-                <ul id="playerList" class="space-y-2">
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Management</li>
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Controlling</li>
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Facility Management</li>
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Einkauf</li>
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Personal</li>
-                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Umweltbeauftragte/r</li>
-                </ul>
             </div>
         </div>
 
-        <!-- Rechte Spalte: Moderationswand & Maßnahmen -->
-        <div class="lg:col-span-2">
-            <div class="bg-white rounded-xl shadow-lg p-6 min-h-full">
-                <h2 class="text-2xl font-bold mb-2">Moderationswand</h2>
-                <p class="text-gray-600 mb-6">Wählt als Team gemeinsam Maßnahmen aus. Klickt auf eine Karte, um sie umzusetzen. Dies verbraucht Budget-Chips, senkt aber den CO2-Ausstoß!</p>
-                
-                <div id="measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Maßnahmenkarten werden hier durch JS generiert -->
+        <!-- ================= ECHTES VISUELLES SPIELFELD (Für alle sichtbar) ================= -->
+        <div id="visual-board-container" class="hidden max-w-7xl mx-auto mb-6 bg-white rounded-xl shadow-lg p-5 border-2 border-ecoGreen">
+            <div class="flex flex-wrap justify-between items-center mb-4 pb-3 border-b">
+                <div>
+                    <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <span>🎲</span> RE:GEBÄUDE Spielplan
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-1">Teams bewegen sich in Pfeilrichtung. Rot = Ereigniskarte, Lila = Teamkarte.</p>
                 </div>
+                <!-- Legende -->
+                <div class="flex flex-wrap gap-3 text-xs font-semibold bg-gray-50 p-2 rounded border">
+                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-red-100 border-2 border-red-500 text-center">⭐</span> Ereigniskarte</span>
+                    <span class="flex items-center gap-1"><span class="w-4 h-4 rounded bg-purple-100 border-2 border-purple-500 text-center">🤝</span> Teamkarte</span>
+                </div>
+            </div>
+
+            <!-- Das 40-Felder Zick-Zack Grid -->
+            <div id="board-grid" class="board-container overflow-x-auto min-w-[700px]">
+                <!-- Wird per JS befüllt -->
+            </div>
+        </div>
+
+        <!-- ================= TEAM-ANSICHT ================= -->
+        <div id="view-team" class="hidden max-w-7xl mx-auto">
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <!-- Linke Spalte: Dashboard & Bilanz -->
+                <div class="xl:col-span-1 space-y-6">
+                    <!-- Dashboard -->
+                    <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-ecoGreen relative">
+                        <h2 class="text-2xl font-bold mb-6 pb-2 border-b text-gray-800" id="dashTeamName">Mein Dashboard</h2>
+                        
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-100">
+                            <p class="text-xs text-gray-500 uppercase font-bold mb-1">Verfügbares Budget (Investitionen)</p>
+                            <p id="t-budget" class="text-4xl font-black text-blue-600 tracking-tight">0 €</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">CO₂-Einsparung</p>
+                                <p id="t-co2" class="text-xl font-bold text-gray-700">0 kg/a</p>
+                            </div>
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Energie-Einsparung</p>
+                                <p id="t-energy" class="text-xl font-bold text-ecoGreen">0 kWh/a</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Energiebilanz Tool (nur in Runde 1 aktiv) -->
+                    <div id="energyBalanceTool" class="bg-white rounded-xl shadow-lg p-6 border-2 border-ecoYellow bg-yellow-50 hidden">
+                        <h3 class="font-bold text-lg mb-2 text-gray-800">Aufgabe: Energiebilanz erstellen</h3>
+                        <p class="text-sm text-gray-600 mb-4">Tragt die exakten Ausgangswerte eures Gebäudes ein, um das Dashboard freizuschalten.</p>
+                        <div class="space-y-3 mb-4">
+                            <div>
+                                <label class="text-xs font-bold text-gray-500">Strom (kWh):</label>
+                                <input type="number" id="eb-strom" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500">Erdgas (kWh):</label>
+                                <input type="number" id="eb-gas" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
+                            </div>
+                            <div>
+                                <label class="text-xs font-bold text-gray-500">Diesel (kWh):</label>
+                                <input type="number" id="eb-diesel" class="w-full border p-2 rounded text-sm shadow-inner" placeholder="z. B. 150000">
+                            </div>
+                        </div>
+                        <button onclick="submitEnergyBalance()" class="w-full bg-ecoYellow text-black font-bold py-3 rounded shadow hover:bg-yellow-500 transition">Werte prüfen & Freischalten</button>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Maßnahmenkarten -->
+                <div class="xl:col-span-2">
+                    <div class="bg-white rounded-xl shadow-lg p-6 min-h-full">
+                        <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4">
+                            <h2 class="text-2xl font-bold text-gray-800">Maßnahmenkarten (Runde <span id="uiRoundNum">1</span>)</h2>
+                            <div class="flex gap-2">
+                                <span class="text-sm bg-blue-100 text-blue-800 font-bold px-3 py-1.5 rounded-full" id="t-budgetInfo">Budget diese Runde: 0 €</span>
+                                <span class="text-sm bg-gray-200 text-gray-800 font-bold px-3 py-1.5 rounded-full" id="t-measuresLeft">Wählbar: 3</span>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-6 font-medium bg-blue-50 p-3 rounded border border-blue-100" id="t-roundRules">Wählt die besten Maßnahmen. Klickt auf eine Karte, um sie umzusetzen.</p>
+                        
+                        <div id="t-measuresGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Karten durch JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= ADMIN-ANSICHT ================= -->
+        <div id="view-admin" class="hidden max-w-7xl mx-auto space-y-6">
+            
+            <!-- ADMIN SPICKZETTEL -->
+            <div class="bg-blue-900 text-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h3 class="font-bold text-xl text-blue-100 mb-1">Trainer-Spickzettel: Lösungs-Werte für die Energiebilanz</h3>
+                    <p class="text-sm text-blue-300">Diese Werte müssen die Teams in Runde 1 eingeben, um ihr Dashboard zu aktivieren:</p>
+                </div>
+                <div class="flex gap-4 bg-blue-800 p-3 rounded-lg border border-blue-700 text-sm">
+                    <div><span class="text-blue-300">Strom:</span> <br><strong class="text-lg text-white">219.000</strong></div>
+                    <div><span class="text-blue-300">Erdgas:</span> <br><strong class="text-lg text-white">415.000</strong></div>
+                    <div><span class="text-blue-300">Diesel:</span> <br><strong class="text-lg text-white">368.000</strong></div>
+                    <div class="border-l border-blue-600 pl-4"><span class="text-blue-300">Ausgangs-CO₂:</span> <br><strong>330.400 kg</strong></div>
+                </div>
+            </div>
+
+            <!-- Cockpit Controls -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-gray-800">
+                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                    <h2 class="text-3xl font-bold text-gray-800">Spiel-Steuerung</h2>
+                    <button onclick="resetGame()" class="text-red-600 hover:text-red-800 underline font-bold text-sm bg-red-50 px-3 py-1 rounded">Vollständiger Reset</button>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Runden Steuerung -->
+                    <div class="bg-gray-50 p-4 rounded-lg border">
+                        <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Spielrunden steuern</h3>
+                        <div class="grid grid-cols-2 gap-2 mb-4">
+                            <button onclick="adminSetRound(1)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 1</button>
+                            <button onclick="adminSetRound(2)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 2</button>
+                            <button onclick="adminSetRound(3)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 3</button>
+                            <button onclick="adminSetRound(4)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 4</button>
+                        </div>
+                        <button onclick="adminEvalRanking()" class="w-full bg-purple-600 text-white px-4 py-3 rounded font-bold hover:bg-purple-700 transition shadow">🏁 Runden-Ranking auswerten & Zusatzbudget verteilen</button>
+                    </div>
+
+                    <!-- Fragerunde Steuerung -->
+                    <div class="bg-gray-50 p-4 rounded-lg border flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Fragen & Ereignisse</h3>
+                            <select id="adminQuestionSelect" class="w-full border p-3 rounded mb-4 font-medium shadow-inner bg-white">
+                                <!-- JS füllt das -->
+                            </select>
+                        </div>
+                        <div class="flex gap-2 mt-auto">
+                            <button onclick="adminShowQuestion()" class="flex-1 bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border border-yellow-600">Starten (60s Timer)</button>
+                            <button onclick="adminHideQuestion()" class="flex-1 bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">Beenden / Ausblenden</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teams Live-Übersicht -->
+            <h3 class="text-xl font-bold text-gray-800 pt-4">Live-Status der Teams</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" id="adminTeamsGrid">
+                <!-- Durch JS generiert -->
             </div>
         </div>
 
     </main>
 
-    <!-- FIREBASE KONFIGURATION (DEINE PERSONELLEN ZUGANGSDATEN) -->
+    <!-- ================= MODAL: FRAGEN (Ereigniskarten) ================= -->
+    <div id="questionModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-3xl w-full relative border-t-8 border-ecoYellow">
+            <div class="absolute top-0 left-0 h-2 bg-ecoGreen timer-bar" id="q-timer-bar" style="width: 100%;"></div>
+            <div class="flex justify-between items-center mb-6 mt-2">
+                <h2 class="text-2xl font-bold text-gray-800" id="qm-title">Fragerunde</h2>
+                <span class="bg-gray-800 text-white font-mono font-bold px-3 py-1 rounded text-xl" id="q-timer-text">60</span>
+            </div>
+            <p class="text-xl mb-8 font-medium text-gray-700 leading-relaxed" id="qm-text">Frage Text...</p>
+            <div id="qm-options" class="flex flex-col gap-3">
+                <!-- Buttons durch JS -->
+            </div>
+            <div id="qm-feedback" class="mt-6 p-4 rounded-lg hidden text-center"></div>
+        </div>
+    </div>
+
+
+    <!-- ================= JAVASCRIPT ================= -->
     <script>
+        // ----------------------------------------------------
+        // 1. FIREBASE KONFIGURATION
+        // ----------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyBU_L3Nyv-0-40mTmdQqmRA_R1VINvakAE",
             authDomain: "re-gebaeude.firebaseapp.com",
@@ -116,123 +306,619 @@
             appId: "1:6180416357:web:630c847ef6fa8e940b4f8c"
         };
 
-        // Überprüfen, ob Firebase-Config eingefügt wurde
-        let db;
-        let isMultiplayerActive = false;
-        if(firebaseConfig.apiKey !== "HIER_KOMMT_DEIN_API_KEY_HIN") {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-            isMultiplayerActive = true;
-        } else {
-            console.warn("Multiplayer (Firebase) ist noch nicht konfiguriert. Spiel läuft im lokalen Einzelspieler-Modus.");
-        }
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-        // --- SPIELLOGIK & DATEN ---
-        const INITIAL_STATE = {
-            budget: 100,
-            co2: 100,
-            measures: [
-                { id: "m1", title: "Gebäudedämmung", desc: "Reduziert Wärmeverlust immens. Hohe Investition.", cost: 25, co2Reduction: 30, active: false },
-                { id: "m2", title: "LED-Beleuchtung", desc: "Austausch der Leuchtmittel (Tab 7.2).", cost: 10, co2Reduction: 15, active: false },
-                { id: "m3", title: "Heizungspumpen-Tausch", desc: "Hocheffizienzpumpen sparen massiv Strom.", cost: 8, co2Reduction: 10, active: false },
-                { id: "m4", title: "Mitarbeiter-Sensibilisierung", desc: "Licht aus, Stoßlüften. Kostet kaum, bringt viel.", cost: 2, co2Reduction: 8, active: false },
-                { id: "m5", title: "Photovoltaik-Anlage", desc: "Eigener grüner Strom vom Dach.", cost: 30, co2Reduction: 25, active: false },
-                { id: "m6", title: "Smart-Home Thermostate", desc: "Automatische Heizungsregelung im Büro.", cost: 12, co2Reduction: 12, active: false }
-            ]
+        // ----------------------------------------------------
+        // SPIELFELD DEFINITION (40 FELDER, Zick-Zack)
+        // ----------------------------------------------------
+        const TOTAL_FIELDS = 40;
+        
+        // Verteilung der Ereignis- und Teamkarten
+        const SPECIAL_FIELDS = {
+            4: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            6: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            8: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            11: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            14: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            16: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            19: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            21: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            24: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            26: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            29: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            31: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            34: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
+            36: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
+            39: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
         };
 
-        let gameState = JSON.parse(JSON.stringify(INITIAL_STATE));
+        const TEAM_COLORS = {
+            "Team 1": "bg-blue-600",
+            "Team 2": "bg-emerald-600",
+            "Team 3": "bg-amber-500",
+            "Team 4": "bg-purple-600"
+        };
 
-        // --- FUNKTIONEN ---
+        // ----------------------------------------------------
+        // 2. SPIEL-DATEN (Fragen & Maßnahmen aus Dokument)
+        // ----------------------------------------------------
+        const QUESTIONS = [
+            { id: "q1", r: 1, text: "Wie hoch war der Anteil erneuerbarer Energien am deutschen Bruttostromverbrauch im Jahr 2025?", opts: ["A. Etwa 40 %", "B. Etwa 55,1 %", "C. Etwa 80 %"], correct: 1 },
+            { id: "q2", r: 1, text: "Wie hoch waren die durchschnittlichen direkten CO₂-Emissionen des in Deutschland verbrauchten Stroms im Jahr 2025 ungefähr?", opts: ["A. Etwa 50 g CO₂/kWh", "B. Etwa 344 g CO₂/kWh", "C. Etwa 600 g CO₂/kWh"], correct: 1 },
+            { id: "q3", r: 1, text: "Welche Klimaschutzziele sind im deutschen Bundes-Klimaschutzgesetz festgelegt?", opts: ["A. Mindestens 55 % bis 2030, Klimaneutralität bis 2050", "B. Mindestens 65 % bis 2030, mindestens 88 % bis 2040, Treibhausgasneutralität bis 2045", "C. Mindestens 80 % bis 2030, Neutralität bis 2040"], correct: 1 },
+            { id: "q4", r: 1, text: "Ein Verwaltungsgebäude verbraucht im Jahr 12.000 kWh Strom. Wie hoch sind die direkten CO₂-Emissionen (Faktor 344 g CO₂/kWh)?", opts: ["A. Etwa 0,41 t CO₂", "B. Etwa 4,13 t CO₂", "C. Etwa 41,3 t CO₂"], correct: 1 },
+            { id: "q5", r: 1, text: "Vergleich 1.000 kWh Erdgas und Strom. Welche Aussage zu CO₂ ist richtig?", opts: ["A. Emissionen sind identisch", "B. Lassen sich nur durch Emissionsfaktoren und Systemgrenzen bestimmen", "C. Strom verursacht grundsätzlich mehr"], correct: 1 },
+            { id: "q6", r: 1, text: "Welcher Kennwert eignet sich, um Energieverbrauch unterschiedlich großer Gebäude zu vergleichen?", opts: ["A. Absoluter Jahresverbrauch", "B. Flächenbezogener Verbrauch (kWh/m²a)", "C. Jährliche Energiekosten"], correct: 1 },
+            
+            { id: "q7", r: 2, text: "Welcher Kraftstoff verursacht geringere CO₂-Emissionen pro 100 km? (E10: 7,3 l vs Diesel: 5,4 l)", opts: ["A. E10 ist geringer", "B. Diesel (ca. 14 kg) ist geringer als E10 (ca. 17 kg)", "C. Beide gleich"], correct: 1 },
+            { id: "q8", r: 2, text: "Warum lässt sich Klimawirkung von E10 und Diesel nicht allein am CO₂ pro Liter vergleichen?", opts: ["A. Energiegehalt spielt keine Rolle", "B. Vorketten, biogene Bestandteile, realer Verbrauch müssen berücksichtigt werden", "C. Sie verursachen immer denselben Verbrauch"], correct: 1 },
+            { id: "q9", r: 2, text: "Einfluss der Geschwindigkeit auf den Energieverbrauch eines Pkw?", opts: ["A. Steigt linear (Rollwiderstand)", "B. Luftwiderstand steigt stark und wird dominierend", "C. Luftwiderstand spielt oberhalb von 100 km/h kaum eine Rolle"], correct: 1 },
+            { id: "q10", r: 2, text: "Zwei LED-Leuchten: A (40W, 4000lm) vs B (50W, 4500lm).", opts: ["A. Leuchte A hat höhere Lichtausbeute (100 lm/W)", "B. Leuchte B hat höhere Lichtausbeute", "C. Beide gleich"], correct: 0 },
+            { id: "q11", r: 2, text: "Bewertung einer Beleuchtungssanierung: Was ist sinnvoll?", opts: ["A. Nur Watt und Preis", "B. Lichtstrom, Beleuchtungsstärke, Blendung, Betriebsstunden, Energieverbrauch, etc.", "C. Nur Anzahl und Farbtemperatur"], correct: 1 },
+            { id: "q12", r: 2, text: "Büro von Leuchtstoff auf LED umrüsten. Was ist korrekt?", opts: ["A. LED ist immer geeignet, wenn Leistung geringer ist", "B. Neben Leistung müssen Kompatibilität, Lichtverteilung, Blendung geprüft werden", "C. Beleuchtungsstärke kann vernachlässigt werden"], correct: 1 },
+            
+            { id: "q13", r: 3, text: "Welche ISO-Norm beschreibt Anforderungen an ein Energiemanagementsystem?", opts: ["A. ISO 14001", "B. ISO 50001", "C. ISO 27001"], correct: 1 },
+            { id: "q14", r: 3, text: "Was beschreibt der PUE bei Rechenzentren?", opts: ["A. Verhältnis Speicher zu Server", "B. Verhältnis Gesamtenergieverbrauch zu Energieverbrauch der IT-Komponenten", "C. Verhältnis Rechenleistung zu elektrischer Anschlussleistung"], correct: 1 },
+            { id: "q15", r: 3, text: "Rechenzentrum Gesamt 1.200 MWh, davon 1.000 MWh IT. PUE-Wert?", opts: ["A. 0,83", "B. 1,20", "C. 2,20"], correct: 1 },
+            { id: "q16", r: 3, text: "Aussagekraft COP bei Kühlsystemen?", opts: ["A. Verhältnis von Kälteleistung zu elektrischer Leistung", "B. Lebensdauer des Verdichters", "C. Verhältnis Anschaffung zu Energiekosten"], correct: 0 },
+            { id: "q17", r: 3, text: "Laptop vs Desktop: Nachhaltigkeitsbewertung?", opts: ["A. Laptop immer nachhaltiger", "B. Neben Betrieb müssen Herstellung, Nutzungsdauer, Entsorgung betrachtet werden", "C. Desktop immer nachhaltiger"], correct: 1 },
+            { id: "q18", r: 3, text: "Maßnahme für längere Arbeitspause am PC?", opts: ["A. Bildschirmschoner", "B. Bildschirm aus, Rechner in Energiesparmodus oder ausschalten", "C. Auflösung erhöhen"], correct: 1 },
 
-        function renderDashboard() {
-            document.getElementById('budgetDisplay').innerText = `${gameState.budget} 🪙`;
-            document.getElementById('co2Display').innerText = `${gameState.co2} ☁️`;
+            { id: "q19", r: 4, text: "Was beschreibt der COP einer Wärmepumpe?", opts: ["A. Verhältnis der abgegebenen Wärmeleistung zur elektrischen Leistung", "B. Verhältnis Investitionskosten zu Lebensdauer", "C. Jährliche Veränderung der Heizleistung"], correct: 0 },
+            { id: "q20", r: 4, text: "Wärmepumpe mit COP von 4 bedeutet?", opts: ["A. Benötigt für 4 kWh Wärme 4 kWh Strom", "B. Gibt etwa 4 kWh Wärme je 1 kWh eingesetzter elektrischer Energie ab", "C. Erreicht 400% Einsparung über Lebensdauer"], correct: 1 },
+            { id: "q21", r: 4, text: "Welcher Kennwert bewertet Wärmepumpe über ein ganzes Jahr?", opts: ["A. COP eines Prüfpunktes", "B. Jahresarbeitszahl (SCOP)", "C. Nennleistung"], correct: 1 },
+            { id: "q22", r: 4, text: "Aussage zum U-Wert eines Bauteils?", opts: ["A. Hoher U-Wert schützt besonders gut", "B. Niedriger U-Wert bedeutet geringeren Wärmedurchgang", "C. Beschreibt ausschließlich Luftdichtheit"], correct: 1 },
+            { id: "q23", r: 4, text: "Warum nach Dämmung Heizungsanlage überprüfen?", opts: ["A. Höherer Wärmebedarf", "B. Wärmebedarf sinkt -> Vorlauftemperatur / Heizkurve anpassen", "C. Muss mit höherer Temperatur betrieben werden"], correct: 1 },
+            { id: "q24", r: 4, text: "Zusammenspiel Dämmung, Luftdichtheit, Lüftung?", opts: ["A. Macht Lüftung überflüssig", "B. Dichtere Hülle reduziert Wärmeverlust, erfordert aber angepasstes Lüftungskonzept", "C. Dämmung verhindert Feuchtigkeit grundsätzlich"], correct: 1 }
+        ];
+
+        const MEASURES = [
+            { id: "A1", r: 1, title: "Mitarbeiter-Schulung Energie", cost: 6000, saveE: 10000, saveCO2: 3300, bonus: 1200, cat: "allg" },
+            { id: "A2", r: 1, title: "Schulung Einkauf/Controlling", cost: 3000, saveE: 0, saveCO2: 0, bonus: 20000, cat: "allg" },
+            { id: "A3", r: 1, title: "Heizungskonzept erstellen", cost: 2500, saveE: 0, saveCO2: 0, bonus: 0, cat: "allg", flags: "heizungskonzept" },
+            { id: "A4", r: 1, title: "Lüftungsplan erstellen", cost: 0, saveE: 21000, saveCO2: 5700, bonus: 500, cat: "allg" },
+            { id: "A5", r: 1, title: "Beleuchtungskonzept", cost: 3000, saveE: 0, saveCO2: 0, bonus: 0, cat: "allg", flags: "lichtkonzept" },
+            { id: "A6", r: 1, title: "PV-Anlage + Speicher", cost: 15000, saveE: 12000, saveCO2: 7200, bonus: 1400, cat: "allg" },
+            
+            { id: "B1", r: 2, title: "Reifenkontrollsystem nachrüsten", cost: 1800, saveE: 6000, saveCO2: 1600, bonus: 300, cat: "fuhrpark" },
+            { id: "B2", r: 2, title: "Fahrertraining Vertrieb", cost: 5000, saveE: 55000, saveCO2: 14900, bonus: 3000, cat: "fuhrpark" },
+            { id: "B3", r: 2, title: "Reiseroutensoftware", cost: 16800, saveE: 73000, saveCO2: 19700, bonus: 4000, cat: "fuhrpark" },
+            { id: "B4", r: 2, title: "5 E-Autos (Nahbereich)", cost: 100000, saveE: 43000, saveCO2: 6000, bonus: 2400, cat: "fuhrpark" },
+            { id: "C1", r: 2, title: "Sensibilisierung Beleuchtung", cost: 0, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "licht" },
+            { id: "C2", r: 2, title: "LED-Retrofit (1:1)", cost: 7000, saveE: 30000, saveCO2: 18000, bonus: 3500, cat: "licht" },
+            { id: "C3", r: 2, title: "Umstellung auf LED-Panels", cost: 9000, saveE: 37000, saveCO2: 22200, bonus: 4300, cat: "licht", reqFlag: "lichtkonzept", penaltyCost: 5000, penaltyE: 7000, penaltyCO2: 4200, penaltyBonus: 800 },
+            
+            { id: "D1", r: 3, title: "Tintenstrahl statt Laser", cost: 5800, saveE: 3000, saveCO2: 1800, bonus: 300, cat: "ikt" },
+            { id: "D2", r: 3, title: "Standby abschaffen", cost: 500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "ikt" },
+            { id: "D3", r: 3, title: "Einstellungen Monitore", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
+            { id: "D4", r: 3, title: "Server virtualisieren", cost: 3000, saveE: 4000, saveCO2: 2400, bonus: 500, cat: "ikt" },
+            { id: "D5", r: 3, title: "Serverraum Temp erhöhen", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
+            
+            { id: "E1", r: 4, title: "Heizkörper entlüften", cost: 0, saveE: 21000, saveCO2: 5000, bonus: 500, cat: "heizung" },
+            { id: "E2", r: 4, title: "Heizungspumpen tauschen", cost: 1500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "heizung" },
+            { id: "E3", r: 4, title: "Temp.Steuerung & Hydr. Abgleich", cost: 7500, saveE: 42000, saveCO2: 10100, bonus: 1100, cat: "heizung" },
+            { id: "E4", r: 4, title: "Brennwertkessel", cost: 18000, saveE: 62000, saveCO2: 14900, bonus: 1600, cat: "heizung", reqFlag: "heizungskonzept", penaltyCost: 5000, penaltyE: 0, penaltyCO2: 0, penaltyBonus: 0 },
+            { id: "E5", r: 4, title: "Wartungsvertrag Heizung", cost: 2000, saveE: 8000, saveCO2: 1900, bonus: 200, cat: "heizung" },
+            { id: "E6", r: 4, title: "Zeitschaltuhren Boiler", cost: 100, saveE: 5000, saveCO2: 3000, bonus: 600, cat: "heizung" },
+            { id: "F1", r: 4, title: "Dichtungen tauschen", cost: 2500, saveE: 8000, saveCO2: 1900, bonus: 200, cat: "daemmung" },
+            { id: "F2", r: 4, title: "Fenster austauschen", cost: 150000, saveE: 60000, saveCO2: 14400, bonus: 1500, cat: "daemmung" },
+            { id: "F3", r: 4, title: "Dachdämmung erneuern", cost: 88000, saveE: 75000, saveCO2: 18000, bonus: 1900, cat: "daemmung" }
+        ];
+
+        const INITIAL_TEAM_STATE = {
+            budget: 0, 
+            co2Saved: 0, 
+            energySaved: 0, 
+            position: 1, 
+            balanceDone: false,
+            measuresTaken: {},
+            flags: {},
+            history: []
+        };
+
+        // ----------------------------------------------------
+        // LOKALER STATUS
+        // ----------------------------------------------------
+        let currentRole = null; 
+        let globalState = { round: 1, activeQuestion: null, questionTimestamp: 0 };
+        let teamsState = {
+            "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+            "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+            "Team 3": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+            "Team 4": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE))
+        };
+        let timerInterval = null;
+
+        // ----------------------------------------------------
+        // FIREBASE SYNCHRONISATION
+        // ----------------------------------------------------
+        db.ref('re-gebaeude/global').on('value', snap => {
+            if(snap.val()) {
+                globalState = snap.val();
+                updateUI();
+            }
+        });
+
+        db.ref('re-gebaeude/teams').on('value', snap => {
+            if(snap.val()) {
+                const serverTeams = snap.val();
+                Object.keys(teamsState).forEach(tk => {
+                    if(serverTeams[tk]) teamsState[tk] = serverTeams[tk];
+                });
+                updateUI();
+            }
+        });
+
+        function pushGlobal() { db.ref('re-gebaeude/global').set(globalState); }
+        function pushTeam(teamName) { db.ref('re-gebaeude/teams/' + teamName).set(teamsState[teamName]); }
+        function pushAllTeams() { db.ref('re-gebaeude/teams').set(teamsState); }
+
+        // ----------------------------------------------------
+        // LOGIN & ANSICHTEN
+        // ----------------------------------------------------
+        function loginAs(teamName) {
+            currentRole = teamName;
+            document.getElementById('headerRole').innerText = "Angemeldet als: " + teamName;
+            document.getElementById('dashTeamName').innerText = teamName + " - Dashboard";
+            
+            document.getElementById('view-login').classList.add('hidden');
+            document.getElementById('visual-board-container').classList.remove('hidden');
+            document.getElementById('view-team').classList.remove('hidden');
+            updateUI();
+        }
+
+        function loginAsAdmin() {
+            if(document.getElementById('adminPassword').value === "Trainer2026") {
+                currentRole = 'Admin';
+                document.getElementById('headerRole').innerText = "Spielleitung (Trainer)";
+                document.getElementById('view-login').classList.add('hidden');
+                document.getElementById('visual-board-container').classList.remove('hidden');
+                document.getElementById('view-admin').classList.remove('hidden');
+                
+                const sel = document.getElementById('adminQuestionSelect');
+                sel.innerHTML = "";
+                QUESTIONS.forEach(q => {
+                    sel.innerHTML += `<option value="${q.id}">R${q.r}: ${q.text.substring(0,60)}...</option>`;
+                });
+                updateUI();
+            } else {
+                alert("Falsches Passwort!");
+            }
+        }
+
+        // ----------------------------------------------------
+        // HAUPT-UI UPDATE SCHLEIFE
+        // ----------------------------------------------------
+        function updateUI() {
+            document.getElementById('headerRoundInfo').classList.remove('hidden');
+            document.getElementById('roundDisplay').innerText = "Runde " + globalState.round;
+            document.getElementById('uiRoundNum').innerText = globalState.round;
+
+            renderVisualBoard();
+            handleQuestionModal();
+
+            if(currentRole && currentRole.startsWith("Team")) {
+                renderTeamDashboard();
+                renderMeasures();
+            } else if (currentRole === "Admin") {
+                renderAdminTeams();
+            }
+        }
+
+        // ----------------------------------------------------
+        // VISUELLES SPIELFELD (ZICK-ZACK)
+        // ----------------------------------------------------
+        function renderVisualBoard() {
+            const grid = document.getElementById('board-grid');
+            grid.innerHTML = "";
+
+            for(let i = 1; i <= TOTAL_FIELDS; i++) {
+                let spec = SPECIAL_FIELDS[i];
+                let fieldBg = "bg-white border-gray-200";
+                let label = `Feld ${i}`;
+                let icon = "";
+
+                if (i === 1) {
+                    fieldBg = "bg-green-100 border-green-500 font-bold shadow-inner";
+                    label = "START";
+                    icon = "🚀";
+                } else if (i === TOTAL_FIELDS) {
+                    fieldBg = "bg-amber-100 border-amber-500 font-bold shadow-inner";
+                    label = "ZIEL";
+                    icon = "🏆";
+                } else if (spec) {
+                    fieldBg = spec.color + " shadow-inner font-bold";
+                    label = spec.label;
+                    icon = spec.icon;
+                }
+
+                // Zick-Zack CSS Order Logik (10 Felder pro Reihe)
+                let order = i;
+                if (i > 10 && i <= 20) order = 31 - i; 
+                else if (i > 20 && i <= 30) order = i + 10;
+                else if (i > 30 && i <= 40) order = 71 - i;
+
+                // Teams auf diesem Feld ermitteln
+                let pawnsHere = [];
+                Object.keys(teamsState).forEach(tName => {
+                    if (teamsState[tName].position === i) {
+                        pawnsHere.push(tName);
+                    } else if (i === TOTAL_FIELDS && teamsState[tName].position >= TOTAL_FIELDS) {
+                        pawnsHere.push(tName);
+                    }
+                });
+
+                grid.innerHTML += `
+                    <div class="board-field ${fieldBg}" style="order: ${order};">
+                        <div class="flex w-full justify-between items-center text-[11px] opacity-90 px-1 pt-1">
+                            <span class="font-black text-gray-400">${i}</span>
+                            <span class="text-sm">${icon}</span>
+                        </div>
+                        <div class="pawn-container p-1">
+                            ${pawnsHere.map(p => `<span class="pawn-badge ${TEAM_COLORS[p]}" title="${p}">${p.replace('Team ', 'T')}</span>`).join('')}
+                        </div>
+                        <div class="text-[9px] uppercase tracking-wider font-bold w-full text-center pb-1 truncate">${label}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // ----------------------------------------------------
+        // TEAM LOGIK (Energiebilanz & Dashboard)
+        // ----------------------------------------------------
+        function renderTeamDashboard() {
+            const tState = teamsState[currentRole];
+            document.getElementById('t-budget').innerText = new Intl.NumberFormat('de-DE').format(tState.budget) + " €";
+            document.getElementById('t-co2').innerText = new Intl.NumberFormat('de-DE').format(tState.co2Saved) + " kg/a";
+            document.getElementById('t-energy').innerText = new Intl.NumberFormat('de-DE').format(tState.energySaved) + " kWh/a";
+
+            const tool = document.getElementById('energyBalanceTool');
+            if(globalState.round === 1 && !tState.balanceDone) {
+                tool.classList.remove('hidden');
+            } else {
+                tool.classList.add('hidden');
+            }
+        }
+
+        function submitEnergyBalance() {
+            const stromVal = parseInt(document.getElementById('eb-strom').value) || 0;
+            const gasVal = parseInt(document.getElementById('eb-gas').value) || 0;
+            const dieselVal = parseInt(document.getElementById('eb-diesel').value) || 0;
+
+            // Strenge Prüfung auf die exakten Werte aus dem Handbuch/Spielfeld
+            if(stromVal === 219000 && gasVal === 415000 && dieselVal === 368000) {
+                const tState = teamsState[currentRole];
+                tState.history.push(JSON.stringify(tState));
+                
+                tState.balanceDone = true;
+                tState.position += 3; // +3 Felder Bonus auf dem Spielfeld
+                pushTeam(currentRole);
+                alert("Energiebilanz erfolgreich erstellt (Werte sind korrekt)! Ihr rückt 3 Felder vor und könnt nun eure Maßnahmen wählen.");
+            } else {
+                alert("Die Energiebilanz stimmt nicht. Bitte prüft eure Startwerte für Strom, Erdgas und Diesel nochmal ganz genau!");
+            }
         }
 
         function renderMeasures() {
-            const grid = document.getElementById('measuresGrid');
-            grid.innerHTML = ''; // Leeren
+            const grid = document.getElementById('t-measuresGrid');
+            grid.innerHTML = '';
+            const tState = teamsState[currentRole];
+            
+            let availableBudget = globalState.round === 3 ? 6000 : tState.budget;
+            
+            let infoText = "";
+            if (globalState.round === 1) infoText = `Vorbeugende Maßnahmen`;
+            if (globalState.round === 2) infoText = `Fuhrpark & Beleuchtung (Pflicht: mind. 1x Fuhrpark, 1x Licht!)`;
+            if (globalState.round === 3) infoText = `IKT. Sonderbudget: 6.000 € (nur für diese Runde!)`;
+            if (globalState.round === 4) infoText = `Heizung & Dämmung (Pflicht: mind. 1x Heizung, 1x Dämmung!)`;
+            
+            document.getElementById('t-roundRules').innerText = infoText;
+            document.getElementById('t-budgetInfo').innerText = `Verfügbar: ${new Intl.NumberFormat('de-DE').format(availableBudget)} €`;
 
-            gameState.measures.forEach(measure => {
-                const isAffordable = gameState.budget >= measure.cost;
-                const cardStateClass = measure.active ? 'bg-ecoLight text-white border-2 border-ecoGreen disabled-card' : 
-                                      (!isAffordable ? 'bg-gray-100 disabled-card' : 'bg-white border cursor-pointer card');
+            let availableMeasures = MEASURES.filter(m => m.r <= globalState.round && (!tState.measuresTaken[m.id] || tState.measuresTaken[m.id] === globalState.round));
+            availableMeasures.sort((a,b) => b.r - a.r);
 
-                const statusText = measure.active ? '✔ Umgesetzt' : (!isAffordable ? 'Zu teuer' : 'Klicken zum Kaufen');
+            let chosenThisRoundCount = 0;
+            Object.keys(tState.measuresTaken).forEach(k => {
+                if(tState.measuresTaken[k] === globalState.round) {
+                    chosenThisRoundCount++;
+                }
+            });
 
-                const cardHTML = `
-                    <div class="rounded-lg p-5 flex flex-col justify-between h-full ${cardStateClass}" 
+            document.getElementById('t-measuresLeft').innerText = `Gewählt: ${chosenThisRoundCount} / 3`;
+
+            availableMeasures.forEach(measure => {
+                const isTaken = !!tState.measuresTaken[measure.id];
+                
+                let realCost = measure.cost;
+                let realSaveE = measure.saveE;
+                let realSaveCO2 = measure.saveCO2;
+                
+                if (measure.reqFlag && !tState.flags[measure.reqFlag]) {
+                    realCost += measure.penaltyCost || 0;
+                    realSaveE -= measure.penaltyE || 0;
+                    realSaveCO2 -= measure.penaltyCO2 || 0;
+                }
+
+                const canAfford = availableBudget >= realCost;
+                const canChooseMore = chosenThisRoundCount < 3;
+                
+                let cardClass = "bg-white card cursor-pointer border-2 border-gray-100";
+                
+                if(isTaken) {
+                    cardClass = "active-card";
+                } else if(!canAfford || !canChooseMore || !tState.balanceDone) {
+                    cardClass = "bg-gray-50 disabled-card";
+                }
+
+                grid.innerHTML += `
+                    <div class="rounded-xl p-5 flex flex-col justify-between h-full shadow-sm ${cardClass}" 
                          onclick="buyMeasure('${measure.id}')">
                         <div>
-                            <h3 class="font-bold text-lg mb-1">${measure.title}</h3>
-                            <p class="text-sm opacity-80 mb-4">${measure.desc}</p>
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-gray-500 bg-gray-100 px-2 py-1 rounded">${measure.cat}</span>
+                                ${isTaken ? '<span class="text-ecoGreen font-black text-xl">✓</span>' : ''}
+                            </div>
+                            <h3 class="font-bold text-lg leading-tight mb-4 text-gray-800">${measure.title}</h3>
                         </div>
-                        <div class="flex justify-between items-center bg-black bg-opacity-5 p-2 rounded">
-                            <span class="font-bold text-blue-600 bg-white px-2 py-1 rounded shadow-sm">-${measure.cost} 🪙</span>
-                            <span class="font-bold text-ecoGreen bg-white px-2 py-1 rounded shadow-sm">-${measure.co2Reduction} ☁️</span>
+                        <div class="space-y-2 mt-auto border-t pt-3">
+                            <div class="flex justify-between text-sm items-center">
+                                <span class="text-gray-600">Investition:</span> 
+                                <span class="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">${new Intl.NumberFormat('de-DE').format(realCost)} €</span>
+                            </div>
+                            <div class="flex justify-between text-sm items-center">
+                                <span class="text-gray-600">Ersparnis/Jahr:</span> 
+                                <div class="text-right">
+                                    <span class="font-bold text-ecoGreen block">-${new Intl.NumberFormat('de-DE').format(realSaveE)} kWh</span>
+                                    <span class="font-bold text-gray-700 block">-${new Intl.NumberFormat('de-DE').format(realSaveCO2)} kg CO₂</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-3 text-center text-xs font-bold uppercase tracking-wider">${statusText}</div>
                     </div>
                 `;
-                grid.innerHTML += cardHTML;
             });
         }
 
         function buyMeasure(id) {
-            const measure = gameState.measures.find(m => m.id === id);
+            const tState = teamsState[currentRole];
+            const measure = MEASURES.find(m => m.id === id);
             
-            // Logik-Prüfung
-            if (measure && !measure.active && gameState.budget >= measure.cost) {
-                gameState.budget -= measure.cost;
-                gameState.co2 -= measure.co2Reduction;
-                measure.active = true;
-                
-                // Entweder lokal aktualisieren oder an Firebase senden
-                if(isMultiplayerActive) {
-                    db.ref('re-gebaeude/state').set(gameState);
-                } else {
-                    updateUI();
-                }
-            } else if (gameState.budget < measure.cost) {
-                alert("Nicht genügend Budget-Chips für diese Maßnahme!");
+            if(!tState.balanceDone && globalState.round === 1) return;
+            if(tState.measuresTaken[id]) return;
+
+            let chosenThisRoundCount = 0;
+            Object.keys(tState.measuresTaken).forEach(k => {
+                if(tState.measuresTaken[k] === globalState.round) chosenThisRoundCount++;
+            });
+
+            if(chosenThisRoundCount >= 3) {
+                alert("Ihr habt in dieser Runde bereits 3 Maßnahmen gewählt!");
+                return;
             }
+
+            let realCost = measure.cost;
+            let realSaveE = measure.saveE;
+            let realSaveCO2 = measure.saveCO2;
+            let realBonus = measure.bonus;
+            
+            if (measure.reqFlag && !tState.flags[measure.reqFlag]) {
+                realCost += measure.penaltyCost || 0;
+                realSaveE -= measure.penaltyE || 0;
+                realSaveCO2 -= measure.penaltyCO2 || 0;
+                realBonus -= measure.penaltyBonus || 0;
+                alert("Achtung! Da euch das entsprechende Konzept aus Runde 1 fehlt, ist diese Maßnahme teurer / weniger effizient.");
+            }
+
+            let availableBudget = globalState.round === 3 ? 6000 : tState.budget;
+
+            if (availableBudget >= realCost) {
+                tState.history.push(JSON.stringify(tState));
+                
+                if(globalState.round !== 3) {
+                    tState.budget -= realCost;
+                }
+                
+                if(measure.flags) tState.flags[measure.flags] = true;
+
+                tState.budget += realBonus; 
+                tState.energySaved += realSaveE;
+                tState.co2Saved += realSaveCO2;
+                tState.measuresTaken[id] = globalState.round;
+                
+                pushTeam(currentRole);
+            } else {
+                alert("Nicht genügend Budget!");
+            }
+        }
+
+        // ----------------------------------------------------
+        // FRAGEN LOGIK (Timer & Modal)
+        // ----------------------------------------------------
+        function handleQuestionModal() {
+            const modal = document.getElementById('questionModal');
+            if (globalState.activeQuestion) {
+                modal.classList.remove('hidden');
+                const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
+                
+                document.getElementById('qm-title').innerText = `Ereigniskarte / Frage (Runde ${q.r})`;
+                document.getElementById('qm-text').innerText = q.text;
+                
+                const optsDiv = document.getElementById('qm-options');
+                optsDiv.innerHTML = '';
+                document.getElementById('qm-feedback').classList.add('hidden');
+                
+                let elapsed = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
+                let timeLeft = Math.max(0, 60 - elapsed);
+                
+                if(timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    let e = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
+                    let t = Math.max(0, 60 - e);
+                    document.getElementById('q-timer-text').innerText = t;
+                    document.getElementById('q-timer-bar').style.width = (t/60)*100 + "%";
+                    
+                    if(t <= 0) {
+                        clearInterval(timerInterval);
+                        if(currentRole !== "Admin" && !teamsState[currentRole].answeredQuestion) {
+                            showFeedback(false, "Zeit abgelaufen! Leider kein Feld vorgerückt.");
+                        }
+                    }
+                }, 1000);
+                
+                if(currentRole === "Admin") {
+                    optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Teams sehen diese Frage gerade mit einem 60s Timer...</p>
+                                         <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">
+                                            Richtige Lösung: ${q.opts[q.correct]}
+                                         </div>`;
+                } else {
+                    const tState = teamsState[currentRole];
+                    if(tState.answeredQuestion === globalState.activeQuestion) {
+                        showFeedback(tState.lastAnswerCorrect, tState.lastAnswerCorrect ? "Ihr hattet recht! 1 Feld vor." : "Das war falsch. Kein Feld vor.");
+                    } else if (timeLeft > 0) {
+                        q.opts.forEach((opt, index) => {
+                            optsDiv.innerHTML += `<button onclick="answerQuestion('${q.id}', ${index}, ${q.correct})" class="bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold py-4 px-6 rounded-lg border-2 border-gray-200 text-left transition shadow-sm text-lg">${opt}</button>`;
+                        });
+                    }
+                }
+            } else {
+                modal.classList.add('hidden');
+                if(timerInterval) clearInterval(timerInterval);
+            }
+        }
+
+        function answerQuestion(qId, selectedIndex, correctIndex) {
+            const isCorrect = (selectedIndex === correctIndex);
+            const tState = teamsState[currentRole];
+            
+            tState.history.push(JSON.stringify(tState));
+            tState.answeredQuestion = qId;
+            tState.lastAnswerCorrect = isCorrect;
+            
+            if(isCorrect) {
+                tState.position += 1; // 1 Feld vorrücken auf dem Spielfeld
+            }
+            pushTeam(currentRole);
+            showFeedback(isCorrect, isCorrect ? "Richtig! Euer Team rückt 1 Feld vor." : "Leider falsch! Ihr bleibt stehen.");
+        }
+
+        function showFeedback(isCorrect, text) {
+            document.getElementById('qm-options').innerHTML = '';
+            const fb = document.getElementById('qm-feedback');
+            fb.classList.remove('hidden');
+            fb.innerText = text;
+            if(isCorrect) {
+                fb.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-green-100 text-green-700 border-2 border-green-500";
+            } else {
+                fb.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-red-100 text-red-700 border-2 border-red-500";
+            }
+        }
+
+        // ----------------------------------------------------
+        // ADMIN LOGIK
+        // ----------------------------------------------------
+        function adminSetRound(r) {
+            if(confirm(`Möchtest du wirklich Runde ${r} für alle Teams starten?`)) {
+                globalState.round = r;
+                pushGlobal();
+            }
+        }
+
+        function adminShowQuestion() {
+            globalState.activeQuestion = document.getElementById('adminQuestionSelect').value;
+            globalState.questionTimestamp = Date.now();
+            
+            Object.keys(teamsState).forEach(tk => {
+                teamsState[tk].answeredQuestion = null;
+            });
+            pushAllTeams();
+            pushGlobal();
+        }
+
+        function adminHideQuestion() {
+            globalState.activeQuestion = null;
+            pushGlobal();
+        }
+
+        function adminEvalRanking() {
+            if(!confirm("Jetzt Ranking auswerten? Teams mit meister Einsparung (CO2 + Energie) rücken 4, 3, 2, 1 Felder vor.")) return;
+            
+            let scores = [];
+            Object.keys(teamsState).forEach(t => {
+                scores.push({ name: t, score: teamsState[t].energySaved + teamsState[t].co2Saved });
+            });
+            scores.sort((a,b) => b.score - a.score);
+            
+            let rewards = [4, 3, 2, 1];
+            scores.forEach((teamObj, index) => {
+                let tName = teamObj.name;
+                teamsState[tName].history.push(JSON.stringify(teamsState[tName]));
+                teamsState[tName].position += (rewards[index] || 0);
+            });
+            pushAllTeams();
+            alert("Erfolgreich! Die Teams wurden entsprechend ihrer Platzierung auf dem Spielfeld vorgerückt.");
+        }
+
+        function adminUndo(teamName) {
+            const tState = teamsState[teamName];
+            if(tState.history && tState.history.length > 0) {
+                if(confirm(`Letzte Aktion von ${teamName} wirklich rückgängig machen?`)) {
+                    const previousStateStr = tState.history.pop();
+                    teamsState[teamName] = JSON.parse(previousStateStr);
+                    pushTeam(teamName);
+                }
+            } else {
+                alert(`Keine Historie für ${teamName} vorhanden.`);
+            }
+        }
+
+        function renderAdminTeams() {
+            const grid = document.getElementById('adminTeamsGrid');
+            grid.innerHTML = '';
+            Object.keys(teamsState).forEach(team => {
+                const s = teamsState[team];
+                
+                let chosenRoundList = [];
+                Object.keys(s.measuresTaken).forEach(mId => {
+                    if(s.measuresTaken[mId] === globalState.round) chosenRoundList.push(mId);
+                });
+
+                grid.innerHTML += `
+                    <div class="border border-gray-200 rounded-xl p-5 bg-white shadow hover:shadow-md transition">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="font-bold text-xl text-gray-800">${team}</h3>
+                            <span class="bg-blue-600 text-white px-3 py-1 text-sm rounded-full font-bold">Feld ${s.position} / 40</span>
+                        </div>
+                        <div class="space-y-1 mb-4">
+                            <p class="text-sm flex justify-between"><span class="text-gray-500">Budget:</span> <span class="font-bold">${new Intl.NumberFormat('de-DE').format(s.budget)} €</span></p>
+                            <p class="text-sm flex justify-between"><span class="text-gray-500">CO₂ gespart:</span> <span class="font-bold">${new Intl.NumberFormat('de-DE').format(s.co2Saved)} kg</span></p>
+                            <p class="text-sm flex justify-between"><span class="text-gray-500">Energie gespart:</span> <span class="font-bold text-ecoGreen">${new Intl.NumberFormat('de-DE').format(s.energySaved)} kWh</span></p>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-2 rounded text-xs text-gray-600 mb-4 h-16 overflow-y-auto">
+                            <strong>Karten Runde ${globalState.round}:</strong><br> 
+                            ${chosenRoundList.length > 0 ? chosenRoundList.join(', ') : 'Noch keine gezogen'}
+                        </div>
+
+                        <button onclick="adminUndo('${team}')" class="w-full text-sm bg-red-50 text-red-600 font-bold px-3 py-2 rounded border border-red-200 hover:bg-red-100 transition">Letzten Klick rückgängig machen</button>
+                    </div>
+                `;
+            });
         }
 
         function resetGame() {
-            if(confirm("Möchtest du das Spiel für alle wirklich zurücksetzen?")) {
-                gameState = JSON.parse(JSON.stringify(INITIAL_STATE));
-                if(isMultiplayerActive) {
-                    db.ref('re-gebaeude/state').set(gameState);
-                } else {
-                    updateUI();
-                }
+            if(confirm("ACHTUNG! Dies setzt das komplette Spiel für alle Teams unwiderruflich auf Null zurück. Sicher?")) {
+                globalState = { round: 1, activeQuestion: null, questionTimestamp: 0 };
+                teamsState = {
+                    "Team 1": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+                    "Team 2": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+                    "Team 3": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
+                    "Team 4": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE))
+                };
+                pushGlobal();
+                pushAllTeams();
             }
         }
-
-        function updateUI() {
-            renderDashboard();
-            renderMeasures();
-        }
-
-        // --- INITIALISIERUNG & FIREBASE LISTENERS ---
-        if (isMultiplayerActive) {
-            // Auf Änderungen in der Datenbank hören
-            db.ref('re-gebaeude/state').on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    gameState = data;
-                } else {
-                    // Falls die Datenbank leer ist, mit Initialwerten füllen
-                    db.ref('re-gebaeude/state').set(INITIAL_STATE);
-                }
-                updateUI();
-            });
-        } else {
-            // Lokaler Modus
-            updateUI();
-        }
-
     </script>
 </body>
 </html>
