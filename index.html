@@ -30,6 +30,7 @@
         .board-container {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(4, 1fr);
             gap: 6px;
             padding: 10px;
             background-color: #f8fafc;
@@ -116,7 +117,7 @@
             <div class="border-t pt-8 bg-gray-50 rounded-b-xl -mx-8 -mb-8 pb-8">
                 <p class="text-sm text-gray-500 mb-3 font-bold uppercase tracking-wide">Nur für Spielleitung (Admin)</p>
                 <div class="flex justify-center gap-2">
-                    <input type="password" id="adminPassword" placeholder="Passwort" class="border p-2 rounded w-48 text-center shadow-inner">
+                    <input type="password" id="adminPassword" placeholder="Passwort (Trainer2026)" class="border p-2 rounded w-56 text-center shadow-inner">
                     <button onclick="loginAsAdmin()" class="bg-gray-800 text-white font-bold py-2 px-6 rounded hover:bg-gray-900 transition shadow">Login</button>
                 </div>
             </div>
@@ -129,7 +130,7 @@
                     <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <span>🎲</span> RE:GEBÄUDE Spielplan
                     </h3>
-                    <p class="text-xs text-gray-500 mt-1">Teams bewegen sich in Pfeilrichtung. Rot = Ereigniskarte, Lila = Teamkarte.</p>
+                    <p class="text-xs text-gray-500 mt-1">Die Teams ziehen schlangenförmig von Feld 1 bis 40.</p>
                 </div>
                 <!-- Legende -->
                 <div class="flex flex-wrap gap-3 text-xs font-semibold bg-gray-50 p-2 rounded border">
@@ -149,6 +150,13 @@
             <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <!-- Linke Spalte: Dashboard & Bilanz -->
                 <div class="xl:col-span-1 space-y-6">
+                    
+                    <!-- Ereigniskarten Hinweis -->
+                    <div id="field-action-container" class="hidden bg-red-50 border-2 border-red-500 rounded-xl p-4 shadow animate-pulse text-center">
+                        <h3 class="font-bold text-red-800 mb-2" id="field-action-title">Du stehst auf einem Ereignisfeld!</h3>
+                        <button onclick="drawBoardCard()" class="bg-red-600 text-white font-bold py-2 px-4 rounded hover:bg-red-700 shadow w-full">Karte ziehen</button>
+                    </div>
+
                     <!-- Dashboard -->
                     <div class="bg-white rounded-xl shadow-lg p-6 border-t-4 border-ecoGreen relative">
                         <h2 class="text-2xl font-bold mb-6 pb-2 border-b text-gray-800" id="dashTeamName">Mein Dashboard</h2>
@@ -225,7 +233,6 @@
                     <div><span class="text-blue-300">Strom:</span> <br><strong class="text-lg text-white">219.000</strong></div>
                     <div><span class="text-blue-300">Erdgas:</span> <br><strong class="text-lg text-white">415.000</strong></div>
                     <div><span class="text-blue-300">Diesel:</span> <br><strong class="text-lg text-white">368.000</strong></div>
-                    <div class="border-l border-blue-600 pl-4"><span class="text-blue-300">Ausgangs-CO₂:</span> <br><strong>330.400 kg</strong></div>
                 </div>
             </div>
 
@@ -246,20 +253,20 @@
                             <button onclick="adminSetRound(3)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 3</button>
                             <button onclick="adminSetRound(4)" class="bg-blue-100 text-blue-800 px-4 py-3 rounded font-bold hover:bg-blue-200 transition border border-blue-200">Runde 4</button>
                         </div>
-                        <button onclick="adminEvalRanking()" class="w-full bg-purple-600 text-white px-4 py-3 rounded font-bold hover:bg-purple-700 transition shadow">🏁 Runden-Ranking auswerten & Zusatzbudget verteilen</button>
+                        <button onclick="adminEvalRanking()" class="w-full bg-purple-600 text-white px-4 py-3 rounded font-bold hover:bg-purple-700 transition shadow">🏁 Runden-Ranking auswerten (Teams vorrücken)</button>
                     </div>
 
                     <!-- Fragerunde Steuerung -->
                     <div class="bg-gray-50 p-4 rounded-lg border flex flex-col justify-between">
                         <div>
-                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Fragen & Ereignisse</h3>
+                            <h3 class="font-bold text-lg mb-3 uppercase tracking-wide text-gray-600">Wissensfragen (Seminar-Runden)</h3>
                             <select id="adminQuestionSelect" class="w-full border p-3 rounded mb-4 font-medium shadow-inner bg-white">
                                 <!-- JS füllt das -->
                             </select>
                         </div>
                         <div class="flex gap-2 mt-auto">
-                            <button onclick="adminShowQuestion()" class="flex-1 bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border border-yellow-600">Starten (60s Timer)</button>
-                            <button onclick="adminHideQuestion()" class="flex-1 bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">Beenden / Ausblenden</button>
+                            <button onclick="adminShowQuestion()" class="flex-1 bg-ecoYellow text-black px-4 py-3 rounded font-bold hover:bg-yellow-500 shadow border border-yellow-600">60s Timer Starten</button>
+                            <button onclick="adminHideQuestion()" class="flex-1 bg-gray-300 text-gray-800 px-4 py-3 rounded font-bold hover:bg-gray-400 shadow">Fenster schließen</button>
                         </div>
                     </div>
                 </div>
@@ -274,7 +281,7 @@
 
     </main>
 
-    <!-- ================= MODAL: FRAGEN (Ereigniskarten) ================= -->
+    <!-- ================= MODAL: FRAGEN (Seminarrunde) ================= -->
     <div id="questionModal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl p-6 md:p-8 max-w-3xl w-full relative border-t-8 border-ecoYellow">
             <div class="absolute top-0 left-0 h-2 bg-ecoGreen timer-bar" id="q-timer-bar" style="width: 100%;"></div>
@@ -287,6 +294,10 @@
                 <!-- Buttons durch JS -->
             </div>
             <div id="qm-feedback" class="mt-6 p-4 rounded-lg hidden text-center"></div>
+            
+            <div id="qm-close-btn" class="hidden mt-6 text-center">
+                <button onclick="closeModalLocally()" class="bg-gray-200 text-gray-800 font-bold px-6 py-2 rounded hover:bg-gray-300">Fenster schließen</button>
+            </div>
         </div>
     </div>
 
@@ -294,7 +305,7 @@
     <!-- ================= JAVASCRIPT ================= -->
     <script>
         // ----------------------------------------------------
-        // 1. FIREBASE KONFIGURATION
+        // 1. FIREBASE KONFIGURATION (Hier Platzhalter ausfüllen)
         // ----------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyBU_L3Nyv-0-40mTmdQqmRA_R1VINvakAE",
@@ -310,11 +321,10 @@
         const db = firebase.database();
 
         // ----------------------------------------------------
-        // SPIELFELD DEFINITION (40 FELDER, Zick-Zack)
+        // SPIELFELD DEFINITION (40 FELDER)
         // ----------------------------------------------------
         const TOTAL_FIELDS = 40;
         
-        // Verteilung der Ereignis- und Teamkarten
         const SPECIAL_FIELDS = {
             4: { type: 'ereignis', label: 'Ereignis', color: 'bg-red-50 border-red-500 text-red-700', icon: '⭐' },
             6: { type: 'team', label: 'Team', color: 'bg-purple-50 border-purple-500 text-purple-700', icon: '🤝' },
@@ -340,6 +350,15 @@
             "Team 4": "bg-purple-600"
         };
 
+        const RANDOM_CARDS = [
+            { text: "Ihr Geschäftsführer hat entschieden, sich an einem Energieeffizienznetzwerk zu beteiligen.", effect: 2, eType: 'pos' },
+            { text: "Zwei Auszubildende werden zu Energiescouts weitergebildet. Positiver Effekt!", effect: 1, eType: 'pos' },
+            { text: "Ihr habt einen Preis beim Energieeffizienz-Wettbewerb gewonnen! (+5.000 €)", effect: 0, budgetAdd: 5000, eType: 'pos' },
+            { text: "Die Mitarbeiter haben einen Monat lang den Fahrstuhl nicht benutzt.", effect: 1, eType: 'pos' },
+            { text: "Der Hausmeister repariert alle Dichtungen freiwillig.", effect: 1, eType: 'pos' },
+            { text: "Im Sommer steigt die Temperatur. Eine ineffiziente Klimaanlage muss installiert werden! (-5.000 €)", effect: 0, budgetAdd: -5000, eType: 'neg' }
+        ];
+
         // ----------------------------------------------------
         // 2. SPIEL-DATEN (Fragen & Maßnahmen aus Dokument)
         // ----------------------------------------------------
@@ -350,21 +369,18 @@
             { id: "q4", r: 1, text: "Ein Verwaltungsgebäude verbraucht im Jahr 12.000 kWh Strom. Wie hoch sind die direkten CO₂-Emissionen (Faktor 344 g CO₂/kWh)?", opts: ["A. Etwa 0,41 t CO₂", "B. Etwa 4,13 t CO₂", "C. Etwa 41,3 t CO₂"], correct: 1 },
             { id: "q5", r: 1, text: "Vergleich 1.000 kWh Erdgas und Strom. Welche Aussage zu CO₂ ist richtig?", opts: ["A. Emissionen sind identisch", "B. Lassen sich nur durch Emissionsfaktoren und Systemgrenzen bestimmen", "C. Strom verursacht grundsätzlich mehr"], correct: 1 },
             { id: "q6", r: 1, text: "Welcher Kennwert eignet sich, um Energieverbrauch unterschiedlich großer Gebäude zu vergleichen?", opts: ["A. Absoluter Jahresverbrauch", "B. Flächenbezogener Verbrauch (kWh/m²a)", "C. Jährliche Energiekosten"], correct: 1 },
-            
             { id: "q7", r: 2, text: "Welcher Kraftstoff verursacht geringere CO₂-Emissionen pro 100 km? (E10: 7,3 l vs Diesel: 5,4 l)", opts: ["A. E10 ist geringer", "B. Diesel (ca. 14 kg) ist geringer als E10 (ca. 17 kg)", "C. Beide gleich"], correct: 1 },
             { id: "q8", r: 2, text: "Warum lässt sich Klimawirkung von E10 und Diesel nicht allein am CO₂ pro Liter vergleichen?", opts: ["A. Energiegehalt spielt keine Rolle", "B. Vorketten, biogene Bestandteile, realer Verbrauch müssen berücksichtigt werden", "C. Sie verursachen immer denselben Verbrauch"], correct: 1 },
             { id: "q9", r: 2, text: "Einfluss der Geschwindigkeit auf den Energieverbrauch eines Pkw?", opts: ["A. Steigt linear (Rollwiderstand)", "B. Luftwiderstand steigt stark und wird dominierend", "C. Luftwiderstand spielt oberhalb von 100 km/h kaum eine Rolle"], correct: 1 },
             { id: "q10", r: 2, text: "Zwei LED-Leuchten: A (40W, 4000lm) vs B (50W, 4500lm).", opts: ["A. Leuchte A hat höhere Lichtausbeute (100 lm/W)", "B. Leuchte B hat höhere Lichtausbeute", "C. Beide gleich"], correct: 0 },
             { id: "q11", r: 2, text: "Bewertung einer Beleuchtungssanierung: Was ist sinnvoll?", opts: ["A. Nur Watt und Preis", "B. Lichtstrom, Beleuchtungsstärke, Blendung, Betriebsstunden, Energieverbrauch, etc.", "C. Nur Anzahl und Farbtemperatur"], correct: 1 },
             { id: "q12", r: 2, text: "Büro von Leuchtstoff auf LED umrüsten. Was ist korrekt?", opts: ["A. LED ist immer geeignet, wenn Leistung geringer ist", "B. Neben Leistung müssen Kompatibilität, Lichtverteilung, Blendung geprüft werden", "C. Beleuchtungsstärke kann vernachlässigt werden"], correct: 1 },
-            
             { id: "q13", r: 3, text: "Welche ISO-Norm beschreibt Anforderungen an ein Energiemanagementsystem?", opts: ["A. ISO 14001", "B. ISO 50001", "C. ISO 27001"], correct: 1 },
             { id: "q14", r: 3, text: "Was beschreibt der PUE bei Rechenzentren?", opts: ["A. Verhältnis Speicher zu Server", "B. Verhältnis Gesamtenergieverbrauch zu Energieverbrauch der IT-Komponenten", "C. Verhältnis Rechenleistung zu elektrischer Anschlussleistung"], correct: 1 },
             { id: "q15", r: 3, text: "Rechenzentrum Gesamt 1.200 MWh, davon 1.000 MWh IT. PUE-Wert?", opts: ["A. 0,83", "B. 1,20", "C. 2,20"], correct: 1 },
             { id: "q16", r: 3, text: "Aussagekraft COP bei Kühlsystemen?", opts: ["A. Verhältnis von Kälteleistung zu elektrischer Leistung", "B. Lebensdauer des Verdichters", "C. Verhältnis Anschaffung zu Energiekosten"], correct: 0 },
             { id: "q17", r: 3, text: "Laptop vs Desktop: Nachhaltigkeitsbewertung?", opts: ["A. Laptop immer nachhaltiger", "B. Neben Betrieb müssen Herstellung, Nutzungsdauer, Entsorgung betrachtet werden", "C. Desktop immer nachhaltiger"], correct: 1 },
             { id: "q18", r: 3, text: "Maßnahme für längere Arbeitspause am PC?", opts: ["A. Bildschirmschoner", "B. Bildschirm aus, Rechner in Energiesparmodus oder ausschalten", "C. Auflösung erhöhen"], correct: 1 },
-
             { id: "q19", r: 4, text: "Was beschreibt der COP einer Wärmepumpe?", opts: ["A. Verhältnis der abgegebenen Wärmeleistung zur elektrischen Leistung", "B. Verhältnis Investitionskosten zu Lebensdauer", "C. Jährliche Veränderung der Heizleistung"], correct: 0 },
             { id: "q20", r: 4, text: "Wärmepumpe mit COP von 4 bedeutet?", opts: ["A. Benötigt für 4 kWh Wärme 4 kWh Strom", "B. Gibt etwa 4 kWh Wärme je 1 kWh eingesetzter elektrischer Energie ab", "C. Erreicht 400% Einsparung über Lebensdauer"], correct: 1 },
             { id: "q21", r: 4, text: "Welcher Kennwert bewertet Wärmepumpe über ein ganzes Jahr?", opts: ["A. COP eines Prüfpunktes", "B. Jahresarbeitszahl (SCOP)", "C. Nennleistung"], correct: 1 },
@@ -380,7 +396,6 @@
             { id: "A4", r: 1, title: "Lüftungsplan erstellen", cost: 0, saveE: 21000, saveCO2: 5700, bonus: 500, cat: "allg" },
             { id: "A5", r: 1, title: "Beleuchtungskonzept", cost: 3000, saveE: 0, saveCO2: 0, bonus: 0, cat: "allg", flags: "lichtkonzept" },
             { id: "A6", r: 1, title: "PV-Anlage + Speicher", cost: 15000, saveE: 12000, saveCO2: 7200, bonus: 1400, cat: "allg" },
-            
             { id: "B1", r: 2, title: "Reifenkontrollsystem nachrüsten", cost: 1800, saveE: 6000, saveCO2: 1600, bonus: 300, cat: "fuhrpark" },
             { id: "B2", r: 2, title: "Fahrertraining Vertrieb", cost: 5000, saveE: 55000, saveCO2: 14900, bonus: 3000, cat: "fuhrpark" },
             { id: "B3", r: 2, title: "Reiseroutensoftware", cost: 16800, saveE: 73000, saveCO2: 19700, bonus: 4000, cat: "fuhrpark" },
@@ -388,13 +403,11 @@
             { id: "C1", r: 2, title: "Sensibilisierung Beleuchtung", cost: 0, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "licht" },
             { id: "C2", r: 2, title: "LED-Retrofit (1:1)", cost: 7000, saveE: 30000, saveCO2: 18000, bonus: 3500, cat: "licht" },
             { id: "C3", r: 2, title: "Umstellung auf LED-Panels", cost: 9000, saveE: 37000, saveCO2: 22200, bonus: 4300, cat: "licht", reqFlag: "lichtkonzept", penaltyCost: 5000, penaltyE: 7000, penaltyCO2: 4200, penaltyBonus: 800 },
-            
             { id: "D1", r: 3, title: "Tintenstrahl statt Laser", cost: 5800, saveE: 3000, saveCO2: 1800, bonus: 300, cat: "ikt" },
             { id: "D2", r: 3, title: "Standby abschaffen", cost: 500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "ikt" },
             { id: "D3", r: 3, title: "Einstellungen Monitore", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
             { id: "D4", r: 3, title: "Server virtualisieren", cost: 3000, saveE: 4000, saveCO2: 2400, bonus: 500, cat: "ikt" },
             { id: "D5", r: 3, title: "Serverraum Temp erhöhen", cost: 0, saveE: 1000, saveCO2: 600, bonus: 100, cat: "ikt" },
-            
             { id: "E1", r: 4, title: "Heizkörper entlüften", cost: 0, saveE: 21000, saveCO2: 5000, bonus: 500, cat: "heizung" },
             { id: "E2", r: 4, title: "Heizungspumpen tauschen", cost: 1500, saveE: 2000, saveCO2: 1200, bonus: 200, cat: "heizung" },
             { id: "E3", r: 4, title: "Temp.Steuerung & Hydr. Abgleich", cost: 7500, saveE: 42000, saveCO2: 10100, bonus: 1100, cat: "heizung" },
@@ -406,14 +419,16 @@
             { id: "F3", r: 4, title: "Dachdämmung erneuern", cost: 88000, saveE: 75000, saveCO2: 18000, bonus: 1900, cat: "daemmung" }
         ];
 
+        // NEU: Startbudget ist jetzt 100.000 € (statt 0 €)
         const INITIAL_TEAM_STATE = {
-            budget: 0, 
+            budget: 100000, 
             co2Saved: 0, 
             energySaved: 0, 
             position: 1, 
             balanceDone: false,
             measuresTaken: {},
             flags: {},
+            drawnCards: {},
             history: []
         };
 
@@ -428,7 +443,10 @@
             "Team 3": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE)),
             "Team 4": JSON.parse(JSON.stringify(INITIAL_TEAM_STATE))
         };
+        
         let timerInterval = null;
+        let currentModalQuestionId = null;
+        let currentModalAnswerStatus = false;
 
         // ----------------------------------------------------
         // FIREBASE SYNCHRONISATION
@@ -479,7 +497,7 @@
                 const sel = document.getElementById('adminQuestionSelect');
                 sel.innerHTML = "";
                 QUESTIONS.forEach(q => {
-                    sel.innerHTML += `<option value="${q.id}">R${q.r}: ${q.text.substring(0,60)}...</option>`;
+                    sel.innerHTML += `<option value="${q.id}">Runde ${q.r}: ${q.text.substring(0,50)}...</option>`;
                 });
                 updateUI();
             } else {
@@ -507,7 +525,7 @@
         }
 
         // ----------------------------------------------------
-        // VISUELLES SPIELFELD (ZICK-ZACK)
+        // VISUELLES SPIELFELD (Snake-Path Zick-Zack behoben)
         // ----------------------------------------------------
         function renderVisualBoard() {
             const grid = document.getElementById('board-grid');
@@ -533,11 +551,10 @@
                     icon = spec.icon;
                 }
 
-                // Zick-Zack CSS Order Logik (10 Felder pro Reihe)
-                let order = i;
-                if (i > 10 && i <= 20) order = 31 - i; 
-                else if (i > 20 && i <= 30) order = i + 10;
-                else if (i > 30 && i <= 40) order = 71 - i;
+                // Echtes Schlangen-Muster berechnen
+                let row = Math.floor((i - 1) / 10) + 1; // 1 bis 4
+                let col = (i - 1) % 10 + 1; // 1 bis 10
+                if (row % 2 === 0) col = 11 - col; // Bei geraden Reihen von rechts nach links
 
                 // Teams auf diesem Feld ermitteln
                 let pawnsHere = [];
@@ -550,7 +567,7 @@
                 });
 
                 grid.innerHTML += `
-                    <div class="board-field ${fieldBg}" style="order: ${order};">
+                    <div class="board-field ${fieldBg}" style="grid-column: ${col}; grid-row: ${row};">
                         <div class="flex w-full justify-between items-center text-[11px] opacity-90 px-1 pt-1">
                             <span class="font-black text-gray-400">${i}</span>
                             <span class="text-sm">${icon}</span>
@@ -565,7 +582,7 @@
         }
 
         // ----------------------------------------------------
-        // TEAM LOGIK (Energiebilanz & Dashboard)
+        // TEAM LOGIK (Energiebilanz, Dashboard, Ereignisse)
         // ----------------------------------------------------
         function renderTeamDashboard() {
             const tState = teamsState[currentRole];
@@ -579,6 +596,47 @@
             } else {
                 tool.classList.add('hidden');
             }
+
+            // Prüfen ob Team auf Ereignisfeld steht
+            const fieldAction = document.getElementById('field-action-container');
+            const spec = SPECIAL_FIELDS[tState.position];
+            
+            if (spec && tState.balanceDone) {
+                // Wenn wir auf dem Feld noch nicht gezogen haben
+                if (!tState.drawnCards || !tState.drawnCards[tState.position]) {
+                    fieldAction.classList.remove('hidden');
+                    document.getElementById('field-action-title').innerText = `Du stehst auf einem ${spec.label}-Feld!`;
+                } else {
+                    fieldAction.classList.add('hidden');
+                }
+            } else {
+                fieldAction.classList.add('hidden');
+            }
+        }
+
+        function drawBoardCard() {
+            const tState = teamsState[currentRole];
+            if (!tState.drawnCards) tState.drawnCards = {};
+            
+            tState.history.push(JSON.stringify(tState));
+            tState.drawnCards[tState.position] = true;
+            
+            // Zufällige Karte ziehen
+            const randIndex = Math.floor(Math.random() * RANDOM_CARDS.length);
+            const card = RANDOM_CARDS[randIndex];
+            
+            let msg = `KARTENTEXT:\n"${card.text}"\n\nAUSWIRKUNG:\n`;
+            if (card.effect !== 0) {
+                tState.position += card.effect;
+                msg += `${card.effect > 0 ? '+' : ''}${card.effect} Felder `;
+            }
+            if (card.budgetAdd) {
+                tState.budget += card.budgetAdd;
+                msg += `${card.budgetAdd > 0 ? '+' : ''}${card.budgetAdd} € `;
+            }
+            
+            pushTeam(currentRole);
+            alert(msg);
         }
 
         function submitEnergyBalance() {
@@ -586,13 +644,12 @@
             const gasVal = parseInt(document.getElementById('eb-gas').value) || 0;
             const dieselVal = parseInt(document.getElementById('eb-diesel').value) || 0;
 
-            // Strenge Prüfung auf die exakten Werte aus dem Handbuch/Spielfeld
             if(stromVal === 219000 && gasVal === 415000 && dieselVal === 368000) {
                 const tState = teamsState[currentRole];
                 tState.history.push(JSON.stringify(tState));
                 
                 tState.balanceDone = true;
-                tState.position += 3; // +3 Felder Bonus auf dem Spielfeld
+                tState.position += 3; // +3 Felder Bonus
                 pushTeam(currentRole);
                 alert("Energiebilanz erfolgreich erstellt (Werte sind korrekt)! Ihr rückt 3 Felder vor und könnt nun eure Maßnahmen wählen.");
             } else {
@@ -733,61 +790,79 @@
         }
 
         // ----------------------------------------------------
-        // FRAGEN LOGIK (Timer & Modal)
+        // FRAGEN LOGIK (Bugfix: Timer wird nicht mehr überschrieben)
         // ----------------------------------------------------
         function handleQuestionModal() {
             const modal = document.getElementById('questionModal');
+            
             if (globalState.activeQuestion) {
                 modal.classList.remove('hidden');
+                
                 const q = QUESTIONS.find(x => x.id === globalState.activeQuestion);
-                
-                document.getElementById('qm-title').innerText = `Ereigniskarte / Frage (Runde ${q.r})`;
-                document.getElementById('qm-text').innerText = q.text;
-                
-                const optsDiv = document.getElementById('qm-options');
-                optsDiv.innerHTML = '';
-                document.getElementById('qm-feedback').classList.add('hidden');
-                
-                let elapsed = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
-                let timeLeft = Math.max(0, 60 - elapsed);
-                
-                if(timerInterval) clearInterval(timerInterval);
-                timerInterval = setInterval(() => {
-                    let e = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
-                    let t = Math.max(0, 60 - e);
-                    document.getElementById('q-timer-text').innerText = t;
-                    document.getElementById('q-timer-bar').style.width = (t/60)*100 + "%";
+                if(!q) return;
+
+                const tState = (currentRole && currentRole.startsWith("Team")) ? teamsState[currentRole] : null;
+                const currentHasAnswered = tState ? (tState.answeredQuestion === q.id) : false;
+
+                // WICHTIG: Nur neu zeichnen, wenn sich Frage oder Antwort-Status WIRKLICH geändert haben
+                if (currentModalQuestionId !== q.id || currentModalAnswerStatus !== currentHasAnswered) {
+                    currentModalQuestionId = q.id;
+                    currentModalAnswerStatus = currentHasAnswered;
+
+                    document.getElementById('qm-title').innerText = `Seminar-Fragerunde (Runde ${q.r})`;
+                    document.getElementById('qm-text').innerText = q.text;
                     
-                    if(t <= 0) {
-                        clearInterval(timerInterval);
-                        if(currentRole !== "Admin" && !teamsState[currentRole].answeredQuestion) {
-                            showFeedback(false, "Zeit abgelaufen! Leider kein Feld vorgerückt.");
+                    const optsDiv = document.getElementById('qm-options');
+                    optsDiv.innerHTML = '';
+                    document.getElementById('qm-feedback').classList.add('hidden');
+                    document.getElementById('qm-close-btn').classList.add('hidden');
+                    
+                    // Timer frisch starten
+                    if(timerInterval) clearInterval(timerInterval);
+                    timerInterval = setInterval(updateModalTimer, 1000);
+                    updateModalTimer(); // Sofortiger Aufruf
+                    
+                    if(currentRole === "Admin") {
+                        optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Die Teams sehen diese Frage gerade. 60s Timer läuft...</p>
+                                             <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">
+                                                Lösung: ${q.opts[q.correct]}
+                                             </div>`;
+                        document.getElementById('qm-close-btn').classList.remove('hidden');
+                    } else {
+                        if (currentHasAnswered) {
+                            showFeedback(tState.lastAnswerCorrect, tState.lastAnswerCorrect ? "Ihr hattet recht! 1 Feld vor." : "Das war falsch. Kein Feld vor.");
+                        } else {
+                            q.opts.forEach((opt, index) => {
+                                optsDiv.innerHTML += `<button onclick="answerQuestion('${q.id}', ${index}, ${q.correct})" class="bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold py-4 px-6 rounded-lg border-2 border-gray-200 text-left transition shadow-sm text-lg">${opt}</button>`;
+                            });
                         }
-                    }
-                }, 1000);
-                
-                if(currentRole === "Admin") {
-                    optsDiv.innerHTML = `<p class="italic text-gray-500 text-center">Teams sehen diese Frage gerade mit einem 60s Timer...</p>
-                                         <div class="bg-green-50 border-2 border-green-500 text-green-800 p-4 rounded mt-4 font-bold text-center shadow">
-                                            Richtige Lösung: ${q.opts[q.correct]}
-                                         </div>`;
-                } else {
-                    const tState = teamsState[currentRole];
-                    if(tState.answeredQuestion === globalState.activeQuestion) {
-                        showFeedback(tState.lastAnswerCorrect, tState.lastAnswerCorrect ? "Ihr hattet recht! 1 Feld vor." : "Das war falsch. Kein Feld vor.");
-                    } else if (timeLeft > 0) {
-                        q.opts.forEach((opt, index) => {
-                            optsDiv.innerHTML += `<button onclick="answerQuestion('${q.id}', ${index}, ${q.correct})" class="bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold py-4 px-6 rounded-lg border-2 border-gray-200 text-left transition shadow-sm text-lg">${opt}</button>`;
-                        });
                     }
                 }
             } else {
                 modal.classList.add('hidden');
                 if(timerInterval) clearInterval(timerInterval);
+                currentModalQuestionId = null;
+                currentModalAnswerStatus = false;
             }
         }
 
-        function answerQuestion(qId, selectedIndex, correctIndex) {
+        function updateModalTimer() {
+            let elapsed = Math.floor((Date.now() - globalState.questionTimestamp) / 1000);
+            let timeLeft = Math.max(0, 60 - elapsed);
+            
+            document.getElementById('q-timer-text').innerText = timeLeft;
+            document.getElementById('q-timer-bar').style.width = (timeLeft/60)*100 + "%";
+            
+            if(timeLeft <= 0) {
+                clearInterval(timerInterval);
+                if(currentRole !== "Admin" && !currentModalAnswerStatus) {
+                    showFeedback(false, "Zeit abgelaufen! Leider kein Feld vorgerückt.");
+                }
+            }
+        }
+
+        // ACHTUNG: Aufruf aus dem HTML onclick!
+        window.answerQuestion = function(qId, selectedIndex, correctIndex) {
             const isCorrect = (selectedIndex === correctIndex);
             const tState = teamsState[currentRole];
             
@@ -796,10 +871,10 @@
             tState.lastAnswerCorrect = isCorrect;
             
             if(isCorrect) {
-                tState.position += 1; // 1 Feld vorrücken auf dem Spielfeld
+                tState.position += 1; 
             }
             pushTeam(currentRole);
-            showFeedback(isCorrect, isCorrect ? "Richtig! Euer Team rückt 1 Feld vor." : "Leider falsch! Ihr bleibt stehen.");
+            // Modal zeichnet sich durch das `pushTeam` (und den folgenden Sync) automatisch neu.
         }
 
         function showFeedback(isCorrect, text) {
@@ -812,19 +887,28 @@
             } else {
                 fb.className = "mt-6 p-4 rounded-lg text-center font-bold text-xl bg-red-100 text-red-700 border-2 border-red-500";
             }
+            document.getElementById('qm-close-btn').classList.remove('hidden');
+        }
+
+        window.closeModalLocally = function() {
+            if (currentRole === "Admin") {
+                adminHideQuestion();
+            } else {
+                document.getElementById('questionModal').classList.add('hidden');
+            }
         }
 
         // ----------------------------------------------------
         // ADMIN LOGIK
         // ----------------------------------------------------
-        function adminSetRound(r) {
+        window.adminSetRound = function(r) {
             if(confirm(`Möchtest du wirklich Runde ${r} für alle Teams starten?`)) {
                 globalState.round = r;
                 pushGlobal();
             }
         }
 
-        function adminShowQuestion() {
+        window.adminShowQuestion = function() {
             globalState.activeQuestion = document.getElementById('adminQuestionSelect').value;
             globalState.questionTimestamp = Date.now();
             
@@ -835,12 +919,12 @@
             pushGlobal();
         }
 
-        function adminHideQuestion() {
+        window.adminHideQuestion = function() {
             globalState.activeQuestion = null;
             pushGlobal();
         }
 
-        function adminEvalRanking() {
+        window.adminEvalRanking = function() {
             if(!confirm("Jetzt Ranking auswerten? Teams mit meister Einsparung (CO2 + Energie) rücken 4, 3, 2, 1 Felder vor.")) return;
             
             let scores = [];
@@ -859,7 +943,7 @@
             alert("Erfolgreich! Die Teams wurden entsprechend ihrer Platzierung auf dem Spielfeld vorgerückt.");
         }
 
-        function adminUndo(teamName) {
+        window.adminUndo = function(teamName) {
             const tState = teamsState[teamName];
             if(tState.history && tState.history.length > 0) {
                 if(confirm(`Letzte Aktion von ${teamName} wirklich rückgängig machen?`)) {
@@ -872,41 +956,7 @@
             }
         }
 
-        function renderAdminTeams() {
-            const grid = document.getElementById('adminTeamsGrid');
-            grid.innerHTML = '';
-            Object.keys(teamsState).forEach(team => {
-                const s = teamsState[team];
-                
-                let chosenRoundList = [];
-                Object.keys(s.measuresTaken).forEach(mId => {
-                    if(s.measuresTaken[mId] === globalState.round) chosenRoundList.push(mId);
-                });
-
-                grid.innerHTML += `
-                    <div class="border border-gray-200 rounded-xl p-5 bg-white shadow hover:shadow-md transition">
-                        <div class="flex justify-between items-center mb-4 border-b pb-2">
-                            <h3 class="font-bold text-xl text-gray-800">${team}</h3>
-                            <span class="bg-blue-600 text-white px-3 py-1 text-sm rounded-full font-bold">Feld ${s.position} / 40</span>
-                        </div>
-                        <div class="space-y-1 mb-4">
-                            <p class="text-sm flex justify-between"><span class="text-gray-500">Budget:</span> <span class="font-bold">${new Intl.NumberFormat('de-DE').format(s.budget)} €</span></p>
-                            <p class="text-sm flex justify-between"><span class="text-gray-500">CO₂ gespart:</span> <span class="font-bold">${new Intl.NumberFormat('de-DE').format(s.co2Saved)} kg</span></p>
-                            <p class="text-sm flex justify-between"><span class="text-gray-500">Energie gespart:</span> <span class="font-bold text-ecoGreen">${new Intl.NumberFormat('de-DE').format(s.energySaved)} kWh</span></p>
-                        </div>
-                        
-                        <div class="bg-gray-50 p-2 rounded text-xs text-gray-600 mb-4 h-16 overflow-y-auto">
-                            <strong>Karten Runde ${globalState.round}:</strong><br> 
-                            ${chosenRoundList.length > 0 ? chosenRoundList.join(', ') : 'Noch keine gezogen'}
-                        </div>
-
-                        <button onclick="adminUndo('${team}')" class="w-full text-sm bg-red-50 text-red-600 font-bold px-3 py-2 rounded border border-red-200 hover:bg-red-100 transition">Letzten Klick rückgängig machen</button>
-                    </div>
-                `;
-            });
-        }
-
-        function resetGame() {
+        window.resetGame = function() {
             if(confirm("ACHTUNG! Dies setzt das komplette Spiel für alle Teams unwiderruflich auf Null zurück. Sicher?")) {
                 globalState = { round: 1, activeQuestion: null, questionTimestamp: 0 };
                 teamsState = {
