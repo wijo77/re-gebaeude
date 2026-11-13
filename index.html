@@ -247,6 +247,21 @@
     <!-- Hauptcontainer -->
     <main class="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
 
+      <!-- Spielende-Banner (falls Siegerpodest lokal minimiert wurde) -->
+      <div id="game-ended-banner" class="hidden rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider text-amber-800">Spielende · Runde 4 abgeschlossen</p>
+          <p class="font-display text-lg font-bold text-slate-900">Das offizielle Siegerpodest & alle Team-Statistiken stehen bereit.</p>
+        </div>
+        <button
+          type="button"
+          onclick="reopenPodiumModal()"
+          class="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm whitespace-nowrap transition-colors"
+        >
+          Siegerpodest öffnen
+        </button>
+      </div>
+
       <!-- ===================================================== -->
       <!-- GLOBALES SPIELFELD (1-40 SCHLANGENMUSTER) & RANKING   -->
       <!-- ===================================================== -->
@@ -306,6 +321,15 @@
       <!-- TEAM-ANSICHT (NUR EIGENES DASHBOARD & MASSNAHMEN)     -->
       <!-- ===================================================== -->
       <section id="section-team" class="hidden space-y-6" aria-label="Team Dashboard">
+        <!-- Hinweisbanner bei laufender Seminar-Fragerunde -->
+        <div id="team-quiz-session-banner" class="hidden rounded-2xl border border-blue-300 bg-blue-50 px-5 py-3.5 text-sm text-blue-950 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <span class="font-bold">Fragerunde läuft:</span>
+            <span id="team-quiz-session-text"></span>
+          </div>
+          <span class="text-xs font-semibold text-blue-800">Vorrücken & Sonderkarten folgen am Ende der Fragerunde</span>
+        </div>
+
         <!-- Benachrichtigung / Ereignis-Banner -->
         <div id="team-card-alert" class="hidden rounded-2xl border-2 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -491,8 +515,8 @@
             <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm">
               <div class="flex items-center justify-between gap-2 mb-4">
                 <div>
-                  <h3 class="font-display text-lg font-bold text-slate-900">Nicht gewählte Maßnahmen</h3>
-                  <p class="text-xs text-slate-500">Ausgegraut und gemäß Spielregel nur vorderseitig sichtbar</p>
+                  <h3 class="font-display text-lg font-bold text-slate-900">Nicht gewählte & gelöschte Maßnahmen</h3>
+                  <p class="text-xs text-slate-500">Grau = nur Vorderseite · Rot = nach Runde 2 endgültig gelöscht</p>
                 </div>
                 <span id="unpicked-count-label" class="text-xs font-semibold text-slate-500 tabular-nums">0 Karten</span>
               </div>
@@ -535,6 +559,14 @@
                 >
                   Ranking auswerten (+4 / +3 / +2 / +1 Felder)
                 </button>
+                <button
+                  type="button"
+                  id="btn-admin-toggle-podium"
+                  onclick="adminTogglePodium()"
+                  class="hidden w-full py-2.5 px-4 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-sm transition-colors whitespace-nowrap"
+                >
+                  Siegerpodest für alle einblenden
+                </button>
               </div>
             </div>
 
@@ -555,7 +587,7 @@
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 class="font-display text-xl font-bold text-slate-900">Seminar-Fragerunde (60s Timer)</h2>
-                <p class="text-xs text-slate-500">Frage senden → Teams antworten lokal (60s) → Auflösen (+1 Feld bei richtiger Antwort)</p>
+                <p class="text-xs text-slate-500">Fragen einzeln senden & auflösen → Punkte sammeln → am Ende gesammelt vorrücken (Kartenziehen solange gesperrt)</p>
               </div>
               <span id="admin-quiz-live-badge" class="text-xs font-semibold text-slate-500">Bereit</span>
             </div>
@@ -581,6 +613,15 @@
             <!-- Live Antworten der Teams -->
             <div id="admin-quiz-answers-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5"></div>
 
+            <!-- Zwischenstand der laufenden Fragerunde -->
+            <div id="admin-quiz-session-box" class="hidden p-3.5 rounded-xl bg-blue-50 border border-blue-200 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span id="admin-quiz-session-summary" class="font-bold text-blue-950">Laufende Fragerunde</span>
+                <span class="text-blue-800">Pawns rücken erst beim Klick auf „Fragerunde beenden“ vor</span>
+              </div>
+              <div id="admin-quiz-session-scores" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"></div>
+            </div>
+
             <div class="flex flex-wrap items-center gap-2.5 pt-1">
               <button
                 type="button"
@@ -595,7 +636,7 @@
                 onclick="adminResolveQuestion()"
                 class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
               >
-                Auflösen (+1 Feld)
+                Frage auflösen (+1 Pkt)
               </button>
               <button
                 type="button"
@@ -603,7 +644,15 @@
                 onclick="adminKillQuizModal()"
                 class="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
               >
-                Kill-Switch: Modal schließen
+                Frage-Fenster schließen
+              </button>
+              <button
+                type="button"
+                id="btn-admin-end-quiz-round"
+                onclick="adminEndQuizRound()"
+                class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
+              >
+                Fragerunde beenden & vorrücken
               </button>
             </div>
           </div>
@@ -697,7 +746,41 @@
   </div>
 
   <!-- ========================================================= -->
-  <!-- 5. BENACHRICHTIGUNGS-TOAST (DEUTLICHES FEEDBACK)          -->
+  <!-- 5. POP-UP MODAL: SPIELENDE & INTERAKTIVES SIEGERPODEST    -->
+  <!-- ========================================================= -->
+  <div id="modal-podium" class="hidden fixed inset-0 z-50 bg-slate-900/75 overflow-y-auto p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="podium-modal-title">
+    <div class="min-h-full flex items-start sm:items-center justify-center">
+      <div class="bg-white rounded-3xl border border-slate-200 max-w-5xl w-full p-5 sm:p-8 shadow-2xl space-y-6 my-4">
+        <div class="flex flex-wrap items-start justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider text-amber-700">Spielende · Abschlussauswertung Runde 4</p>
+            <h2 id="podium-modal-title" class="font-display text-2xl sm:text-3xl font-bold text-slate-900 mt-0.5">
+              Siegerpodest & Team-Statistiken
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-600 mt-1">
+              Klicken Sie auf ein Team auf dem Podest, um alle Kennzahlen und gewählten Maßnahmenkarten im Detail anzusehen.
+            </p>
+          </div>
+          <button
+            type="button"
+            onclick="dismissPodiumLocally()"
+            class="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors"
+          >
+            Schließen
+          </button>
+        </div>
+
+        <!-- Visuelles Podest (Platz 1-4 anklickbar) -->
+        <div id="podium-cards-grid" class="space-y-4"></div>
+
+        <!-- Ausgewählte Team-Details -->
+        <div id="podium-team-detail" class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-6 space-y-5"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- 6. BENACHRICHTIGUNGS-TOAST (DEUTLICHES FEEDBACK)          -->
   <!-- ========================================================= -->
   <div id="toast-container" aria-live="polite" class="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm pointer-events-none"></div>
 
@@ -1198,10 +1281,15 @@
         meta: {
           currentRound: 1,
           evaluatedRounds: {},
+          gameEnded: false,
           updatedAt: Date.now()
         },
         quiz: {
           active: false,
+          sessionActive: false,
+          sessionRound: 1,
+          resolvedQuestionIds: [],
+          sessionScores: { team1: 0, team2: 0, team3: 0, team4: 0 },
           instanceId: null,
           questionId: null,
           round: 1,
@@ -1287,17 +1375,25 @@
       const activated = new Set(team.activatedMeasures || []);
       const discarded = new Set(team.discardedMeasures || []);
       if (round === 1) {
-        return MEASURE_CARDS.filter(c => c.round === 1);
+        return MEASURE_CARDS.filter(c => c.round === 1 && !discarded.has(c.id));
       }
       if (round === 2) {
         return MEASURE_CARDS.filter(c => (c.round === 2 || (c.round === 1 && !activated.has(c.id))) && !discarded.has(c.id));
       }
       if (round === 3) {
-        return MEASURE_CARDS.filter(c => c.round === 3);
+        return MEASURE_CARDS.filter(c => c.round === 3 && !discarded.has(c.id));
       }
       if (round === 4) {
-        const kept = new Set(team.keptFromR2 || []);
-        return MEASURE_CARDS.filter(c => c.round === 4 || (kept.has(c.id) && !activated.has(c.id)));
+        if (team.carryoverDoneR2) {
+          const kept = new Set(team.keptFromR2 || []);
+          return MEASURE_CARDS.filter(
+            c => (c.round === 4 || (kept.has(c.id) && !activated.has(c.id))) && !discarded.has(c.id)
+          );
+        }
+        // Fallback falls Runde 2 noch nicht abgeschlossen wurde: alle offenen R1/R2-Karten + alle 9 R4-Karten
+        return MEASURE_CARDS.filter(
+          c => (c.round === 4 || ((c.round === 1 || c.round === 2) && !activated.has(c.id))) && !discarded.has(c.id)
+        );
       }
       return [];
     }
@@ -1435,6 +1531,21 @@
       return list;
     }
 
+    function computeFinalPodiumRanking(teamsObj) {
+      const list = Object.values(teamsObj).slice();
+      list.sort((a, b) => {
+        const posDiff = (Number(b.position) || 1) - (Number(a.position) || 1);
+        if (posDiff !== 0) return posDiff;
+        const combA = (a.totalEnergySaved || 0) + (a.totalCo2Saved || 0);
+        const combB = (b.totalEnergySaved || 0) + (b.totalCo2Saved || 0);
+        if (combB !== combA) return combB - combA;
+        const co2Diff = (b.totalCo2Saved || 0) - (a.totalCo2Saved || 0);
+        if (co2Diff !== 0) return co2Diff;
+        return a.id.localeCompare(b.id);
+      });
+      return list;
+    }
+
     // =========================================================================
     // 4. HILFSFUNKTIONEN & FORMATIERUNG
     // =========================================================================
@@ -1486,9 +1597,10 @@
     // Lokaler Client-State (nicht in Firebase, verhindert Flackern & Timer-Resets!)
     let sessionRole = null; // 'team1' | 'team2' | 'team3' | 'team4' | 'admin'
     let localDraftSelection = { round: null, ids: [] };
-    let localCarryoverSelection = [];
+    let localDiscardR2Selection = [];
     let localActiveQuiz = { instanceId: null, startTimeMs: 0, dismissed: false, timerInterval: null };
     let localActiveSpecialCard = null; // { kind: 'ereignis'|'team', card, selectedOptionIdx }
+    let localPodiumState = { dismissed: false, selectedTeamId: null, lastGameEnded: false };
     let renderSignatures = {};
 
     function isFirebaseConfigured() {
@@ -1509,12 +1621,23 @@
         base.meta = {
           currentRound: Number(raw.meta.currentRound) || 1,
           evaluatedRounds: raw.meta.evaluatedRounds || {},
+          gameEnded: Boolean(raw.meta.gameEnded),
           updatedAt: raw.meta.updatedAt || Date.now()
         };
       }
       if (raw.quiz) {
+        const rawScores = raw.quiz.sessionScores || {};
         base.quiz = {
           active: Boolean(raw.quiz.active),
+          sessionActive: Boolean(raw.quiz.sessionActive),
+          sessionRound: Number(raw.quiz.sessionRound) || Number(raw.quiz.round) || base.meta.currentRound || 1,
+          resolvedQuestionIds: Array.isArray(raw.quiz.resolvedQuestionIds) ? raw.quiz.resolvedQuestionIds : [],
+          sessionScores: {
+            team1: Number(rawScores.team1) || 0,
+            team2: Number(rawScores.team2) || 0,
+            team3: Number(rawScores.team3) || 0,
+            team4: Number(rawScores.team4) || 0
+          },
           instanceId: raw.quiz.instanceId || null,
           questionId: raw.quiz.questionId || null,
           round: Number(raw.quiz.round) || 1,
@@ -1719,6 +1842,8 @@
       stopLocalQuizTimer();
       document.getElementById('modal-quiz').classList.add('hidden');
       document.getElementById('modal-special-card').classList.add('hidden');
+      document.getElementById('modal-podium').classList.add('hidden');
+      document.getElementById('game-ended-banner').classList.add('hidden');
       document.getElementById('view-app').classList.add('hidden');
       document.getElementById('view-login').classList.remove('hidden');
       document.body.dataset.state = 'login';
@@ -1864,6 +1989,7 @@
       }
 
       syncQuizModal();
+      syncPodiumModal();
     }
 
     function renderLiveRanking() {
@@ -1949,21 +2075,40 @@
         document.getElementById('kpi-saved-co2').textContent = `${formatNum(team.totalCo2Saved)} kg CO2`;
       }
 
-      // 2. Sonderfeld-Karte ziehen Banner
+      // 2. Laufende Fragerunde-Statusbanner & Sonderfeld-Karte ziehen Banner
+      const quizLocked = Boolean(appState.quiz && (appState.quiz.sessionActive || appState.quiz.active));
+      const quizSessionBanner = document.getElementById('team-quiz-session-banner');
+      const quizSessionText = document.getElementById('team-quiz-session-text');
+      if (quizSessionBanner && quizSessionText) {
+        if (quizLocked) {
+          const myPts = (appState.quiz.sessionScores && appState.quiz.sessionScores[teamId]) || 0;
+          const resolvedCnt = (appState.quiz.resolvedQuestionIds || []).length;
+          quizSessionText.textContent = `Fragerunde ${appState.quiz.sessionRound || round} · ${myPts} ${myPts === 1 ? 'Punkt' : 'Punkte'} gesammelt (${resolvedCnt} Fragen aufgelöst)`;
+          quizSessionBanner.classList.remove('hidden');
+        } else {
+          quizSessionBanner.classList.add('hidden');
+        }
+      }
+
       const alertEl = document.getElementById('team-card-alert');
       if (team.pendingCardDraw && team.pendingCardDraw.type) {
         const isEvent = team.pendingCardDraw.type === 'ereignis';
-        alertEl.classList.remove('hidden', 'bg-red-50', 'border-red-300', 'bg-purple-50', 'border-purple-300');
+        alertEl.classList.remove('hidden', 'bg-red-50', 'border-red-300', 'bg-purple-50', 'border-purple-300', 'bg-slate-50', 'border-slate-300');
         alertEl.classList.add(isEvent ? 'bg-red-50' : 'bg-purple-50', isEvent ? 'border-red-300' : 'border-purple-300');
         document.getElementById('team-card-alert-title').textContent = isEvent
           ? `Sie stehen auf einem Ereignisfeld (Feld ${team.pendingCardDraw.field})!`
           : `Sie stehen auf einem Teamfeld (Feld ${team.pendingCardDraw.field})!`;
-        document.getElementById('team-card-alert-desc').textContent = isEvent
-          ? 'Ziehen Sie eine zufällige Ereigniskarte aus dem Stapel.'
-          : 'Ziehen Sie eine zufällige Teamkarte aus dem Stapel.';
+        document.getElementById('team-card-alert-desc').textContent = quizLocked
+          ? 'Fragerunde aktiv: Ereignis-/Teamkarten können erst nach Ende der Fragerunde gezogen werden.'
+          : (isEvent
+            ? 'Ziehen Sie eine zufällige Ereigniskarte aus dem Stapel.'
+            : 'Ziehen Sie eine zufällige Teamkarte aus dem Stapel.');
         const drawBtn = document.getElementById('btn-draw-special-card');
-        drawBtn.className = `px-5 py-3 rounded-xl font-semibold text-sm text-white shadow-sm whitespace-nowrap transition-colors ${isEvent ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'}`;
-        drawBtn.textContent = isEvent ? 'Ereigniskarte ziehen' : 'Teamkarte ziehen';
+        drawBtn.disabled = quizLocked;
+        drawBtn.className = `px-5 py-3 rounded-xl font-semibold text-sm text-white shadow-sm whitespace-nowrap transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${isEvent ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'}`;
+        drawBtn.textContent = quizLocked
+          ? 'Gesperrt (Fragerunde läuft)'
+          : (isEvent ? 'Ereigniskarte ziehen' : 'Teamkarte ziehen');
       } else {
         alertEl.classList.add('hidden');
       }
@@ -1997,7 +2142,7 @@
         carryover: team.carryoverDoneR2,
         flags: team.flags,
         draft: localDraftSelection.ids,
-        carryDraft: localCarryoverSelection
+        discardDraft: localDiscardR2Selection
       });
 
       if (renderSignatures.teamMeasures === measureSig) return;
@@ -2010,42 +2155,48 @@
     function renderActiveRoundMeasuresBox(team, round) {
       const box = document.getElementById('team-active-round-box');
       const isSubmitted = Boolean(team.submittedRounds && team.submittedRounds[round]);
+      const r2Submitted = Boolean(team.submittedRounds && team.submittedRounds[2]);
 
-      // Sonderfall Ende Runde 2: Von den 7 übrigen Maßnahmenkarten müssen 4 behalten (3 gelöscht) werden!
-      if (round === 2 && isSubmitted && !team.carryoverDoneR2) {
+      // Pflicht-Zwischenschritt nach Runde 2 (auch vor Runde 4 falls noch offen!):
+      // Von den übrigen nicht gewählten Maßnahmenkarten müssen 3 zum endgültigen Löschen ausgewählt werden!
+      if (r2Submitted && !team.carryoverDoneR2 && round !== 3) {
         const activated = new Set(team.activatedMeasures || []);
         const remaining = MEASURE_CARDS.filter(c => (c.round === 1 || c.round === 2) && !activated.has(c.id));
+        const deleteRequired = Math.min(3, remaining.length);
+        const keepCount = Math.max(0, remaining.length - deleteRequired);
 
         box.innerHTML = `
           <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-wider text-amber-700">Zwischenschritt nach Runde 2</p>
-              <h3 class="font-display text-xl font-bold text-slate-900">4 von ${remaining.length} übrigen Maßnahmen für Runde 4 mitnehmen</h3>
-              <p class="text-xs text-slate-600 mt-0.5">Die übrigen 3 nicht gewählten Maßnahmenkarten werden gelöscht (abgegeben).</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-red-700">Pflichtschritt nach Runde 2</p>
+              <h3 class="font-display text-xl font-bold text-slate-900">${deleteRequired} von ${remaining.length} nicht gewählten Maßnahmen endgültig löschen</h3>
+              <p class="text-xs text-slate-600 mt-0.5">
+                Markieren Sie ${deleteRequired} Karten zum endgültigen Löschen (werden rot ausgeblendet und sind in Runde 4 gesperrt). Die übrigen ${keepCount} Karten nehmen Sie in Runde 4 mit.
+              </p>
             </div>
-            <span class="font-mono text-sm font-bold text-slate-900 tabular-nums">${localCarryoverSelection.length} / 4 behalten</span>
+            <span class="font-mono text-sm font-bold text-red-700 tabular-nums">${localDiscardR2Selection.length} / ${deleteRequired} zum Löschen gewählt</span>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
             ${remaining.map(c => {
-              const sel = localCarryoverSelection.includes(c.id);
+              const selForDelete = localDiscardR2Selection.includes(c.id);
               const stats = getEffectiveCardStats(c, team);
               return `
-                <button type="button" onclick="toggleCarryoverCard('${c.id}')" class="measure-card text-left p-4 rounded-xl border ${sel ? 'border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600' : 'border-slate-200 bg-white hover:border-slate-300'}">
+                <button type="button" onclick="toggleDiscardR2Card('${c.id}')" class="measure-card text-left p-4 rounded-xl border ${selForDelete ? 'border-red-500 bg-red-50 ring-2 ring-red-500' : 'border-slate-200 bg-white hover:border-slate-300'}">
                   <div class="flex items-center justify-between text-xs text-slate-500 mb-1.5">
-                    <span class="font-semibold">${c.id} · ${escapeHtml(c.category)}</span>
+                    <span class="font-semibold ${selForDelete ? 'text-red-800' : ''}">${c.id} · ${escapeHtml(c.category)}</span>
                     <span class="font-mono font-bold text-slate-900">${formatEur(stats.cost)}</span>
                   </div>
-                  <p class="text-sm font-semibold text-slate-900 leading-snug">${escapeHtml(c.title)}</p>
-                  <p class="text-[11px] font-medium mt-2 ${sel ? 'text-emerald-700' : 'text-slate-400'}">
-                    ${sel ? 'Ausgewählt zum Mitnehmen ✓' : 'Klicken zum Mitnehmen'}
+                  <p class="text-sm font-semibold leading-snug ${selForDelete ? 'line-through text-red-900' : 'text-slate-900'}">${escapeHtml(c.title)}</p>
+                  <p class="text-[11px] font-semibold mt-2 ${selForDelete ? 'text-red-700' : 'text-slate-400'}">
+                    ${selForDelete ? 'Zum endgültigen Löschen markiert ✕' : 'Klicken zum Löschen'}
                   </p>
                 </button>
               `;
             }).join('')}
           </div>
           <div class="flex justify-end">
-            <button type="button" onclick="confirmCarryoverR2()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-colors disabled:opacity-40" ${localCarryoverSelection.length !== 4 ? 'disabled' : ''}>
-              4 Karten für Runde 4 sichern & 3 löschen
+            <button type="button" onclick="confirmDiscardR2()" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition-colors disabled:opacity-40" ${localDiscardR2Selection.length !== deleteRequired ? 'disabled' : ''}>
+              ${deleteRequired} Karten endgültig löschen (${keepCount} für Runde 4 behalten)
             </button>
           </div>
         `;
@@ -2081,15 +2232,19 @@
       const budgetOk = draftCost <= availBudget;
 
       let ruleHint = 'Wählen Sie genau 3 Maßnahmenkarten aus.';
-      if (round === 2) ruleHint = 'Wählen Sie 3 aus 10 Karten · Pflicht: mind. 1× Fuhrpark (B1–B4) & mind. 1× Beleuchtung (C1–C3).';
-      if (round === 3) ruleHint = `Sonderbudget IKT: exakt ${formatEur(team.specialBudgetR3)} nur für Runde 3 · Wählen Sie 3 aus 5 Karten.`;
-      if (round === 4) ruleHint = 'Wählen Sie 3 aus 13 Karten · Pflicht: mind. 1× Heizung (E1–E6) & mind. 1× Dämmung (F1–F3).';
+      if (round === 2) ruleHint = `Wählen Sie 3 aus ${pool.length} Karten · Pflicht: mind. 1× Fuhrpark (B1–B4) & mind. 1× Beleuchtung (C1–C3).`;
+      if (round === 3) ruleHint = `Sonderbudget IKT: exakt ${formatEur(team.specialBudgetR3)} nur für Runde 3 · Wählen Sie 3 aus ${pool.length} Karten.`;
+      if (round === 4) ruleHint = `Wählen Sie 3 aus ${pool.length} Karten (9 neue + mitgenommene Restkarten) · Pflicht: mind. 1× Heizung (E1–E6) & mind. 1× Dämmung (F1–F3).`;
+
+      const discardedInR2 = (team.discardedMeasures || [])
+        .map(id => MEASURE_CARDS.find(c => c.id === id))
+        .filter(Boolean);
 
       box.innerHTML = `
         <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
           <div>
             <p class="text-xs font-semibold uppercase tracking-wider text-emerald-700">${ROUND_NAMES[round]}</p>
-            <h3 class="font-display text-xl font-bold text-slate-900">Maßnahmen auswählen (Nur Vorderseite sichtbar)</h3>
+            <h3 class="font-display text-xl font-bold text-slate-900">Maßnahmen auswählen (${pool.length} verfügbar · Nur Vorderseite)</h3>
             <p class="text-xs text-slate-600 mt-0.5">${ruleHint}</p>
           </div>
           <div class="flex items-center gap-4 text-right">
@@ -2141,6 +2296,25 @@
           }).join('')}
         </div>
 
+        ${round === 4 && discardedInR2.length > 0 ? `
+          <div class="mb-5 p-3.5 rounded-xl border border-red-200 bg-red-50/60 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wider text-red-800">
+              Nach Runde 2 endgültig gelöschte Maßnahmen (rot ausgeblendet · nicht mehr wählbar)
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              ${discardedInR2.map(c => `
+                <div class="p-2.5 rounded-lg border border-red-200 bg-red-100/60 opacity-75">
+                  <div class="flex items-center justify-between text-[11px] text-red-800 font-semibold">
+                    <span>${c.id} · ${escapeHtml(c.category)}</span>
+                    <span>Gelöscht</span>
+                  </div>
+                  <p class="text-xs font-medium text-red-900 line-through mt-0.5">${escapeHtml(c.title)}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
           <p class="text-xs text-slate-500">
             Nach Umsetzung erhalten Sie 50% der erzielten Energieeinsparung (kWh) als Budget-Bonus in €.
@@ -2159,7 +2333,8 @@
     function renderActivatedAndUnpickedCards(team, round) {
       const activatedIds = team.activatedMeasures || [];
       const activatedSet = new Set(activatedIds);
-      const discardedSet = new Set(team.discardedMeasures || []);
+      const discardedIds = team.discardedMeasures || [];
+      const discardedSet = new Set(discardedIds);
 
       document.getElementById('activated-count-label').textContent = `${activatedIds.length} Maßnahmen`;
       const actContainer = document.getElementById('team-activated-list');
@@ -2197,16 +2372,20 @@
         !activatedSet.has(c.id) &&
         !discardedSet.has(c.id)
       );
-      document.getElementById('unpicked-count-label').textContent = `${unpicked.length} Karten`;
+      const discardedCards = discardedIds
+        .map(id => MEASURE_CARDS.find(c => c.id === id))
+        .filter(Boolean);
+
+      document.getElementById('unpicked-count-label').textContent = `${unpicked.length} offen · ${discardedCards.length} gelöscht`;
       const unpickedContainer = document.getElementById('team-unpicked-list');
 
-      if (unpicked.length === 0) {
+      if (unpicked.length === 0 && discardedCards.length === 0) {
         unpickedContainer.innerHTML = `<p class="text-sm text-slate-400 py-4">Keine offenen Vorderseiten.</p>`;
       } else {
-        unpickedContainer.innerHTML = unpicked.map(c => {
+        const unpickedHtml = unpicked.map(c => {
           const eff = getEffectiveCardStats(c, team);
           return `
-            <div class="p-3 rounded-xl border border-slate-200 bg-slate-100/80 opacity-75">
+            <div class="p-3 rounded-xl border border-slate-200 bg-slate-100/80 opacity-80">
               <div class="flex items-center justify-between text-xs text-slate-500 mb-0.5">
                 <span class="font-semibold">${c.id} · ${escapeHtml(c.category)} (R${c.round})</span>
                 <span class="font-mono tabular-nums">${formatEur(eff.cost)}</span>
@@ -2215,6 +2394,26 @@
             </div>
           `;
         }).join('');
+
+        const discardedHtml = discardedCards.length > 0 ? `
+          <div class="pt-2 space-y-2">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-red-700">Endgültig gelöscht (rot ausgeblendet)</p>
+            ${discardedCards.map(c => {
+              const eff = getEffectiveCardStats(c, team);
+              return `
+                <div class="p-3 rounded-xl border border-red-200 bg-red-50/80 opacity-70">
+                  <div class="flex items-center justify-between text-xs text-red-700 mb-0.5">
+                    <span class="font-semibold">${c.id} · ${escapeHtml(c.category)} (Gelöscht)</span>
+                    <span class="font-mono tabular-nums">${formatEur(eff.cost)}</span>
+                  </div>
+                  <p class="text-xs font-semibold text-red-900 line-through">${escapeHtml(c.title)}</p>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : '';
+
+        unpickedContainer.innerHTML = unpickedHtml + discardedHtml;
       }
     }
 
@@ -2331,45 +2530,57 @@
       );
     }
 
-    function toggleCarryoverCard(cardId) {
-      const idx = localCarryoverSelection.indexOf(cardId);
+    function toggleDiscardR2Card(cardId) {
+      if (!sessionRole || sessionRole === 'admin') return;
+      const team = appState.teams[sessionRole];
+      const activated = new Set(team.activatedMeasures || []);
+      const remaining = MEASURE_CARDS.filter(c => (c.round === 1 || c.round === 2) && !activated.has(c.id));
+      const deleteRequired = Math.min(3, remaining.length);
+
+      const idx = localDiscardR2Selection.indexOf(cardId);
       if (idx >= 0) {
-        localCarryoverSelection.splice(idx, 1);
+        localDiscardR2Selection.splice(idx, 1);
       } else {
-        if (localCarryoverSelection.length >= 4) {
-          showToast('Es dürfen genau 4 Maßnahmenkarten in Runde 4 mitgenommen werden.', 'error');
+        if (localDiscardR2Selection.length >= deleteRequired) {
+          showToast(`Bitte wählen Sie genau ${deleteRequired} Maßnahmenkarten zum Löschen aus.`, 'error');
           return;
         }
-        localCarryoverSelection.push(cardId);
+        localDiscardR2Selection.push(cardId);
       }
       renderTeamDashboard(sessionRole);
     }
 
-    function confirmCarryoverR2() {
+    function confirmDiscardR2() {
       if (!sessionRole || sessionRole === 'admin') return;
-      if (localCarryoverSelection.length !== 4) {
-        showToast('Bitte wählen Sie genau 4 Karten zum Mitnehmen aus.', 'error');
-        return;
-      }
       const team = JSON.parse(JSON.stringify(appState.teams[sessionRole]));
-      pushTeamHistory(team, '4 Restkarten für Runde 4 gesichert');
-
       const activated = new Set(team.activatedMeasures || []);
       const remaining = MEASURE_CARDS.filter(c => (c.round === 1 || c.round === 2) && !activated.has(c.id));
-      const keptSet = new Set(localCarryoverSelection);
+      const deleteRequired = Math.min(3, remaining.length);
 
-      team.keptFromR2 = localCarryoverSelection.slice();
-      team.discardedMeasures = remaining.filter(c => !keptSet.has(c.id)).map(c => c.id);
+      if (localDiscardR2Selection.length !== deleteRequired) {
+        showToast(`Bitte wählen Sie genau ${deleteRequired} Karten zum endgültigen Löschen aus.`, 'error');
+        return;
+      }
+
+      pushTeamHistory(team, `${deleteRequired} Restkarten endgültig gelöscht`);
+      const discardSet = new Set(localDiscardR2Selection);
+
+      team.discardedMeasures = remaining.filter(c => discardSet.has(c.id)).map(c => c.id);
+      team.keptFromR2 = remaining.filter(c => !discardSet.has(c.id)).map(c => c.id);
       team.carryoverDoneR2 = true;
 
-      localCarryoverSelection = [];
+      localDiscardR2Selection = [];
       writePath(`teams/${team.id}`, team);
-      showToast('4 Karten für Runde 4 gesichert, 3 übrige Karten abgegeben.', 'success');
+      showToast(`${team.discardedMeasures.length} Karten endgültig gelöscht, ${team.keptFromR2.length} Karten für Runde 4 gesichert.`, 'success');
     }
 
     // --- Ereignis- & Teamkarten ziehen ---
     function openDrawSpecialCard() {
       if (!sessionRole || sessionRole === 'admin') return;
+      if (appState.quiz && (appState.quiz.sessionActive || appState.quiz.active)) {
+        showToast('Während einer laufenden Fragerunde können keine Ereignis- oder Teamkarten gezogen werden.', 'error');
+        return;
+      }
       const team = appState.teams[sessionRole];
       if (!team.pendingCardDraw) return;
 
@@ -2615,12 +2826,13 @@
       if (quiz.revealed) {
         stopLocalQuizTimer();
         fb.classList.remove('hidden');
+        const roundPts = (quiz.sessionScores && quiz.sessionScores[sessionRole]) || 0;
         if (myAnswer === q.correctIndex) {
           fb.className = 'p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-sm font-semibold text-emerald-900';
-          fb.textContent = 'Richtig beantwortet! Ihr Team rückt automatisch 1 Feld vor.';
+          fb.textContent = `Richtig beantwortet! +1 Punkt in Fragerunde ${quiz.sessionRound || q.round} (Zwischenstand: ${roundPts} Pkt). Das Vorrücken erfolgt gesammelt am Ende der Fragerunde.`;
         } else {
           fb.className = 'p-4 rounded-xl border border-red-200 bg-red-50 text-sm font-semibold text-red-900';
-          fb.textContent = `Leider nicht richtig. Richtige Antwort: ${q.options[q.correctIndex]}`;
+          fb.textContent = `Leider nicht richtig. Richtige Antwort: ${q.options[q.correctIndex]} (Zwischenstand Fragerunde: ${roundPts} Pkt)`;
         }
         note.textContent = 'Aufgelöst durch Trainer.';
         closeBtn.classList.remove('hidden');
@@ -2681,6 +2893,18 @@
           : `Ranking Runde ${round} auswerten (+4 / +3 / +2 / +1)`;
       }
 
+      const podiumBtn = document.getElementById('btn-admin-toggle-podium');
+      if (podiumBtn) {
+        if (round === 4 || appState.meta.gameEnded) {
+          podiumBtn.classList.remove('hidden');
+          podiumBtn.textContent = appState.meta.gameEnded
+            ? 'Siegerpodest für alle ausblenden'
+            : 'Siegerpodest für alle einblenden';
+        } else {
+          podiumBtn.classList.add('hidden');
+        }
+      }
+
       // Frage-Selectbox nur initialisieren, wenn noch leer (verhindert Zurücksetzen während Admin klickt!)
       const qSelect = document.getElementById('admin-quiz-question-select');
       if (qSelect && qSelect.options.length === 0) {
@@ -2692,16 +2916,49 @@
       const liveBadge = document.getElementById('admin-quiz-live-badge');
       const resolveBtn = document.getElementById('btn-admin-resolve-quiz');
       const killBtn = document.getElementById('btn-admin-kill-quiz');
+      const endRoundBtn = document.getElementById('btn-admin-end-quiz-round');
+      const sessionBox = document.getElementById('admin-quiz-session-box');
+      const sessionSummary = document.getElementById('admin-quiz-session-summary');
+      const sessionScoresEl = document.getElementById('admin-quiz-session-scores');
+
       if (quiz.active) {
         liveBadge.textContent = quiz.revealed ? 'Frage aufgelöst (Modal offen)' : 'Frage LIVE bei Teams';
         liveBadge.className = `text-xs font-bold ${quiz.revealed ? 'text-blue-700' : 'text-emerald-700'}`;
         resolveBtn.disabled = quiz.revealed;
         killBtn.disabled = false;
+      } else if (quiz.sessionActive) {
+        liveBadge.textContent = `Fragerunde ${quiz.sessionRound} pausiert (bereit für nächste Frage)`;
+        liveBadge.className = 'text-xs font-bold text-blue-700';
+        resolveBtn.disabled = true;
+        killBtn.disabled = true;
       } else {
         liveBadge.textContent = 'Bereit';
         liveBadge.className = 'text-xs font-semibold text-slate-500';
         resolveBtn.disabled = true;
         killBtn.disabled = true;
+      }
+      if (endRoundBtn) {
+        endRoundBtn.disabled = !quiz.sessionActive;
+      }
+
+      if (sessionBox && sessionSummary && sessionScoresEl) {
+        if (quiz.sessionActive) {
+          sessionBox.classList.remove('hidden');
+          const resCount = (quiz.resolvedQuestionIds || []).length;
+          sessionSummary.textContent = `Laufende Fragerunde ${quiz.sessionRound} · ${resCount} von 6 Fragen aufgelöst`;
+          sessionScoresEl.innerHTML = ['team1', 'team2', 'team3', 'team4'].map(tid => {
+            const t = appState.teams[tid];
+            const pts = (quiz.sessionScores && quiz.sessionScores[tid]) || 0;
+            return `
+              <div class="p-2 rounded-lg bg-white border border-blue-200 flex items-center justify-between gap-2">
+                <span class="font-semibold text-slate-800 truncate">${escapeHtml(t.name)}</span>
+                <span class="font-mono font-bold text-blue-800 shrink-0">${pts} Pkt</span>
+              </div>
+            `;
+          }).join('');
+        } else {
+          sessionBox.classList.add('hidden');
+        }
       }
 
       const answersGrid = document.getElementById('admin-quiz-answers-grid');
@@ -2771,6 +3028,7 @@
 
               <div class="text-[11px] text-slate-600 space-y-0.5">
                 <p><strong>Maßnahmen:</strong> ${t.activatedMeasures.length > 0 ? t.activatedMeasures.join(', ') : '–'}</p>
+                ${t.pendingCardDraw ? `<p class="font-semibold ${t.pendingCardDraw.type === 'ereignis' ? 'text-red-700' : 'text-purple-700'}">Offene Karte: ${t.pendingCardDraw.type === 'ereignis' ? 'Ereigniskarte' : 'Teamkarte'} (Feld ${t.pendingCardDraw.field})</p>` : ''}
                 <p class="truncate"><strong>Letzter Schritt:</strong> ${escapeHtml(t.lastActionLabel || '–')}</p>
               </div>
             </div>
@@ -2826,11 +3084,26 @@
 
       const nextMeta = JSON.parse(JSON.stringify(appState.meta));
       nextMeta.evaluatedRounds = { ...(nextMeta.evaluatedRounds || {}), [round]: true };
+      if (round === 4) {
+        nextMeta.gameEnded = true;
+      }
       nextMeta.updatedAt = Date.now();
 
       writePath('teams', nextTeams);
       writePath('meta', nextMeta);
-      showToast(`Ranking Runde ${round} ausgewertet! Platz 1–4 sind vorgerückt.`, 'success');
+      showToast(
+        round === 4
+          ? 'Runde 4 ausgewertet! Das Siegerpodest wird für alle Teams eingeblendet.'
+          : `Ranking Runde ${round} ausgewertet! Platz 1–4 sind vorgerückt.`,
+        'success'
+      );
+    }
+
+    function adminTogglePodium() {
+      if (sessionRole !== 'admin') return;
+      const nextVal = !Boolean(appState.meta.gameEnded);
+      writePath('meta/gameEnded', nextVal);
+      showToast(nextVal ? 'Siegerpodest für alle eingeblendet!' : 'Siegerpodest ausgeblendet.', 'info');
     }
 
     function adminUndoTeam(teamId) {
@@ -2849,7 +3122,8 @@
       if (sessionRole !== 'admin') return;
       const team = JSON.parse(JSON.stringify(appState.teams[teamId]));
       pushTeamHistory(team, `Admin-Korrektur (${delta > 0 ? '+' : ''}${delta} Feld)`);
-      moveTeamPosition(team, delta, false);
+      // Beim Vorrücken (+1) werden rote Ereignis- und lila Teamfelder korrekt ausgelöst!
+      moveTeamPosition(team, delta, delta > 0);
       writePath(`teams/${teamId}`, team);
     }
 
@@ -2857,7 +3131,8 @@
       if (sessionRole !== 'admin') return;
       const fresh = createInitialGameState();
       localDraftSelection = { round: 1, ids: [] };
-      localCarryoverSelection = [];
+      localDiscardR2Selection = [];
+      localPodiumState = { dismissed: false, selectedTeamId: null, lastGameEnded: false };
       writePath('', fresh);
       showToast('Gesamtes Spiel auf Anfangszustand zurückgesetzt.', 'info');
     }
@@ -2897,8 +3172,21 @@
       const q = QUIZ_QUESTIONS.find(item => item.id === qSelect.value);
       if (!q) return;
 
+      const currentQuiz = appState.quiz || {};
+      const continueSession = Boolean(currentQuiz.sessionActive && Number(currentQuiz.sessionRound) === q.round);
       const payload = {
         active: true,
+        sessionActive: true,
+        sessionRound: q.round,
+        resolvedQuestionIds: continueSession ? (currentQuiz.resolvedQuestionIds || []).slice() : [],
+        sessionScores: continueSession
+          ? {
+              team1: Number((currentQuiz.sessionScores && currentQuiz.sessionScores.team1) || 0),
+              team2: Number((currentQuiz.sessionScores && currentQuiz.sessionScores.team2) || 0),
+              team3: Number((currentQuiz.sessionScores && currentQuiz.sessionScores.team3) || 0),
+              team4: Number((currentQuiz.sessionScores && currentQuiz.sessionScores.team4) || 0)
+            }
+          : { team1: 0, team2: 0, team3: 0, team4: 0 },
         instanceId: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         questionId: q.id,
         round: q.round,
@@ -2906,7 +3194,7 @@
         answers: {}
       };
       writePath('quiz', payload);
-      showToast(`Frage ${q.code} (Runde ${q.round}) an alle Teams gesendet!`, 'success');
+      showToast(`Frage ${q.code} (Fragerunde ${q.round}) an alle Teams gesendet!`, 'success');
     }
 
     function adminResolveQuestion() {
@@ -2916,27 +3204,31 @@
       const q = QUIZ_QUESTIONS.find(item => item.id === quiz.questionId);
       if (!q) return;
 
-      const nextTeams = JSON.parse(JSON.stringify(appState.teams));
+      const nextQuiz = JSON.parse(JSON.stringify(quiz));
+      nextQuiz.sessionActive = true;
+      nextQuiz.sessionRound = Number(quiz.sessionRound) || q.round;
+      nextQuiz.resolvedQuestionIds = Array.isArray(nextQuiz.resolvedQuestionIds) ? nextQuiz.resolvedQuestionIds : [];
+      nextQuiz.sessionScores = nextQuiz.sessionScores || { team1: 0, team2: 0, team3: 0, team4: 0 };
+
+      const alreadyCounted = nextQuiz.resolvedQuestionIds.includes(q.id);
       const winners = [];
 
-      for (const tid of ['team1', 'team2', 'team3', 'team4']) {
-        const ans = quiz.answers && quiz.answers[tid] !== undefined ? Number(quiz.answers[tid]) : null;
-        if (ans === q.correctIndex) {
-          const team = nextTeams[tid];
-          pushTeamHistory(team, `Quiz ${q.code} (R${q.round}) richtig (+1 Feld)`);
-          moveTeamPosition(team, 1, true);
-          winners.push(team.name);
+      if (!alreadyCounted) {
+        for (const tid of ['team1', 'team2', 'team3', 'team4']) {
+          const ans = quiz.answers && quiz.answers[tid] !== undefined ? Number(quiz.answers[tid]) : null;
+          if (ans === q.correctIndex) {
+            nextQuiz.sessionScores[tid] = (Number(nextQuiz.sessionScores[tid]) || 0) + 1;
+            winners.push(appState.teams[tid].name);
+          }
         }
+        nextQuiz.resolvedQuestionIds.push(q.id);
       }
 
-      const nextQuiz = JSON.parse(JSON.stringify(quiz));
       nextQuiz.revealed = true;
-
-      writePath('teams', nextTeams);
       writePath('quiz', nextQuiz);
       showToast(
         winners.length > 0
-          ? `Aufgelöst! +1 Feld für: ${winners.join(', ')}`
+          ? `Aufgelöst! +1 Fragerunden-Punkt für: ${winners.join(', ')} (Vorrücken am Ende der Fragerunde)`
           : 'Aufgelöst! Leider keine richtige Team-Antwort.',
         'info'
       );
@@ -2944,15 +3236,281 @@
 
     function adminKillQuizModal() {
       if (sessionRole !== 'admin') return;
+      const cur = appState.quiz || {};
       writePath('quiz', {
+        ...cur,
         active: false,
+        instanceId: null,
+        questionId: null,
+        revealed: false,
+        answers: {}
+      });
+      showToast('Frage-Fenster geschlossen. Laufende Fragerunde bleibt aktiv.', 'info');
+    }
+
+    function adminEndQuizRound() {
+      if (sessionRole !== 'admin') return;
+      const quiz = appState.quiz || {};
+      if (!quiz.sessionActive) {
+        showToast('Aktuell läuft keine Fragerunde.', 'error');
+        return;
+      }
+
+      const roundNum = Number(quiz.sessionRound) || appState.meta.currentRound;
+      const scores = quiz.sessionScores || {};
+      const nextTeams = JSON.parse(JSON.stringify(appState.teams));
+      const summaryParts = [];
+
+      for (const tid of ['team1', 'team2', 'team3', 'team4']) {
+        const pts = Number(scores[tid]) || 0;
+        const team = nextTeams[tid];
+        if (pts > 0) {
+          pushTeamHistory(team, `Fragerunde R${roundNum}: ${pts} richtig (+${pts} Felder)`);
+          const landed = moveTeamPosition(team, pts, true);
+          summaryParts.push(`${team.name}: +${pts} → Feld ${landed}`);
+        }
+      }
+
+      const resetQuiz = {
+        active: false,
+        sessionActive: false,
+        sessionRound: appState.meta.currentRound,
+        resolvedQuestionIds: [],
+        sessionScores: { team1: 0, team2: 0, team3: 0, team4: 0 },
         instanceId: null,
         questionId: null,
         round: appState.meta.currentRound,
         revealed: false,
         answers: {}
-      });
-      showToast('Frage-Modal bei allen Teams geschlossen (Kill-Switch).', 'info');
+      };
+
+      writePath('teams', nextTeams);
+      writePath('quiz', resetQuiz);
+      showToast(
+        summaryParts.length > 0
+          ? `Fragerunde beendet! Vorgerückt: ${summaryParts.join(' · ')}`
+          : 'Fragerunde beendet! Keine Punkte gesammelt.',
+        'success'
+      );
+    }
+
+    // =========================================================================
+    // 13. SIEGERPODEST & ENDAUSWERTUNG (RUNDE 4)
+    // =========================================================================
+    function syncPodiumModal() {
+      const gameEnded = Boolean(appState.meta && appState.meta.gameEnded);
+      const modal = document.getElementById('modal-podium');
+      const banner = document.getElementById('game-ended-banner');
+      if (!modal || !banner) return;
+
+      if (!gameEnded) {
+        localPodiumState.lastGameEnded = false;
+        localPodiumState.dismissed = false;
+        modal.classList.add('hidden');
+        banner.classList.add('hidden');
+        return;
+      }
+
+      if (!localPodiumState.lastGameEnded) {
+        localPodiumState.lastGameEnded = true;
+        localPodiumState.dismissed = false;
+      }
+
+      if (localPodiumState.dismissed) {
+        modal.classList.add('hidden');
+        banner.classList.remove('hidden');
+        return;
+      }
+
+      banner.classList.add('hidden');
+      renderPodiumModal();
+      modal.classList.remove('hidden');
+    }
+
+    function dismissPodiumLocally() {
+      localPodiumState.dismissed = true;
+      document.getElementById('modal-podium').classList.add('hidden');
+      if (appState.meta && appState.meta.gameEnded) {
+        document.getElementById('game-ended-banner').classList.remove('hidden');
+      }
+    }
+
+    function reopenPodiumModal() {
+      localPodiumState.dismissed = false;
+      renderPodiumModal();
+      document.getElementById('game-ended-banner').classList.add('hidden');
+      document.getElementById('modal-podium').classList.remove('hidden');
+    }
+
+    function selectPodiumTeam(teamId) {
+      localPodiumState.selectedTeamId = teamId;
+      renderPodiumModal();
+    }
+
+    function renderPodiumModal() {
+      const ranking = computeFinalPodiumRanking(appState.teams);
+      if (!localPodiumState.selectedTeamId || !appState.teams[localPodiumState.selectedTeamId]) {
+        localPodiumState.selectedTeamId = ranking[0].id;
+      }
+
+      const selectedId = localPodiumState.selectedTeamId;
+      const cardsGrid = document.getElementById('podium-cards-grid');
+      const detailBox = document.getElementById('podium-team-detail');
+      if (!cardsGrid || !detailBox) return;
+
+      // Visuelles Podest: Platz 2 links, Platz 1 erhöht in der Mitte, Platz 3 rechts; Platz 4 darunter
+      const visualTop3 = [
+        { team: ranking[1], rank: 2, cls: 'md:mt-6 border-slate-300 bg-slate-50', badge: '2. Platz', badgeCls: 'bg-slate-200 text-slate-800' },
+        { team: ranking[0], rank: 1, cls: 'border-amber-400 bg-amber-50/70 shadow-md', badge: '1. Platz · Sieger', badgeCls: 'bg-amber-500 text-white' },
+        { team: ranking[2], rank: 3, cls: 'md:mt-10 border-orange-300 bg-orange-50/60', badge: '3. Platz', badgeCls: 'bg-orange-200 text-orange-900' }
+      ];
+      const fourth = ranking[3];
+
+      const renderPodiumBtn = (t, rank, extraCls, badgeText, badgeCls) => {
+        const isSelected = t.id === selectedId;
+        return `
+          <button
+            type="button"
+            onclick="selectPodiumTeam('${t.id}')"
+            aria-pressed="${isSelected ? 'true' : 'false'}"
+            class="podium-team-btn text-left rounded-2xl border-2 p-4 sm:p-5 transition-all flex flex-col justify-between space-y-3 ${extraCls} ${isSelected ? 'ring-2 ring-emerald-600 ring-offset-2' : 'hover:border-emerald-400'}"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${badgeCls}">${badgeText}</span>
+              <span class="font-mono text-sm font-bold text-slate-900 tabular-nums">Feld ${t.position} / 40</span>
+            </div>
+            <div class="flex items-center gap-2.5">
+              <span class="w-3.5 h-3.5 rounded-full shrink-0" style="background:${TEAM_COLORS[t.id].hex}"></span>
+              <span class="font-display text-lg sm:text-xl font-bold text-slate-900 truncate">${escapeHtml(t.name)}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80 text-xs">
+              <div>
+                <p class="text-slate-500">Energie gespart</p>
+                <p class="font-mono font-bold text-emerald-700 tabular-nums">${formatNum(t.totalEnergySaved)} kWh</p>
+              </div>
+              <div>
+                <p class="text-slate-500">CO2 gespart</p>
+                <p class="font-mono font-bold text-emerald-700 tabular-nums">${formatNum(t.totalCo2Saved)} kg</p>
+              </div>
+            </div>
+            <p class="text-[11px] font-semibold ${isSelected ? 'text-emerald-700' : 'text-slate-500'}">
+              ${isSelected ? 'Ausgewählt · Details unten sichtbar' : 'Klicken für volle Statistik & Maßnahmen'}
+            </p>
+          </button>
+        `;
+      };
+
+      cardsGrid.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          ${visualTop3.map(item => renderPodiumBtn(item.team, item.rank, item.cls, item.badge, item.badgeCls)).join('')}
+        </div>
+        ${fourth ? `
+          <div>
+            ${renderPodiumBtn(fourth, 4, 'w-full border-slate-200 bg-white', '4. Platz', 'bg-slate-100 text-slate-700')}
+          </div>
+        ` : ''}
+      `;
+
+      const selTeam = appState.teams[selectedId];
+      const selRankIdx = ranking.findIndex(t => t.id === selectedId) + 1;
+      const selMeasures = (selTeam.activatedMeasures || [])
+        .map(id => MEASURE_CARDS.find(c => c.id === id))
+        .filter(Boolean);
+      const selDiscarded = (selTeam.discardedMeasures || [])
+        .map(id => MEASURE_CARDS.find(c => c.id === id))
+        .filter(Boolean);
+
+      detailBox.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="w-4 h-4 rounded-full shrink-0" style="background:${TEAM_COLORS[selTeam.id].hex}"></span>
+            <div>
+              <h3 class="font-display text-xl font-bold text-slate-900">
+                ${selRankIdx}. Platz: ${escapeHtml(selTeam.name)}
+              </h3>
+              <p class="text-xs text-slate-600">
+                Spielfeld-Position: <strong>Feld ${selTeam.position} / 40</strong> · ${selMeasures.length} Maßnahmen umgesetzt
+              </p>
+            </div>
+          </div>
+          <div class="text-right text-xs text-slate-600">
+            <span class="font-semibold">Rest-Budget:</span>
+            <span class="font-mono font-bold text-slate-900 text-sm tabular-nums">${formatEur(selTeam.budget)}</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-white border border-slate-200">
+            <p class="text-slate-500">Endposition</p>
+            <p class="font-mono text-sm sm:text-base font-bold text-slate-900 tabular-nums whitespace-nowrap">Feld ${selTeam.position} / 40</p>
+          </div>
+          <div class="p-3 rounded-xl bg-white border border-slate-200">
+            <p class="text-slate-500">Strombedarf</p>
+            <p class="font-mono text-base font-bold text-emerald-800 tabular-nums">${formatNum(selTeam.strom)} kWh</p>
+            <p class="text-[10px] text-slate-400">Start: ${formatNum(BASELINE.strom)}</p>
+          </div>
+          <div class="p-3 rounded-xl bg-white border border-slate-200">
+            <p class="text-slate-500">Erdgasbedarf</p>
+            <p class="font-mono text-base font-bold text-amber-800 tabular-nums">${formatNum(selTeam.erdgas)} kWh</p>
+            <p class="text-[10px] text-slate-400">Start: ${formatNum(BASELINE.erdgas)}</p>
+          </div>
+          <div class="p-3 rounded-xl bg-white border border-slate-200">
+            <p class="text-slate-500">Dieselbedarf</p>
+            <p class="font-mono text-base font-bold text-blue-800 tabular-nums">${formatNum(selTeam.diesel)} kWh</p>
+            <p class="text-[10px] text-slate-400">Start: ${formatNum(BASELINE.diesel)}</p>
+          </div>
+          <div class="p-3 rounded-xl bg-white border border-slate-200">
+            <p class="text-slate-500">Aktuelle CO2-Bilanz</p>
+            <p class="font-mono text-base font-bold text-slate-900 tabular-nums">${formatNum(selTeam.co2)} kg</p>
+            <p class="text-[10px] text-slate-400">Start: ${formatNum(BASELINE.totalCo2)}</p>
+          </div>
+          <div class="p-3 rounded-xl bg-emerald-600 text-white">
+            <p class="text-emerald-100">Gesamt-Einsparung</p>
+            <p class="font-mono text-sm font-bold tabular-nums">${formatNum(selTeam.totalEnergySaved)} kWh</p>
+            <p class="font-mono text-xs text-emerald-100 tabular-nums">${formatNum(selTeam.totalCo2Saved)} kg CO2</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          ${[1, 2, 3, 4].map(r => `
+            <div class="p-2.5 rounded-xl bg-white border border-slate-200">
+              <p class="font-semibold text-slate-600">Runde ${r}</p>
+              <p class="font-mono font-bold text-slate-900 tabular-nums mt-0.5">${formatNum((selTeam.roundEnergySaved && selTeam.roundEnergySaved[r]) || 0)} kWh</p>
+              <p class="font-mono text-slate-500 tabular-nums">${formatNum((selTeam.roundCo2Saved && selTeam.roundCo2Saved[r]) || 0)} kg CO2</p>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="font-display text-base font-bold text-slate-900">Gewählte & umgesetzte Maßnahmen (${selMeasures.length})</h4>
+            ${selDiscarded.length > 0 ? `<span class="text-xs font-medium text-red-700">Gelöscht (R2): ${selDiscarded.map(c => c.id).join(', ')}</span>` : ''}
+          </div>
+          ${selMeasures.length === 0
+            ? `<p class="text-sm text-slate-500 py-2">Dieses Team hat noch keine Maßnahmen umgesetzt.</p>`
+            : `
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                ${selMeasures.map(c => {
+                  const eff = getEffectiveCardStats(c, selTeam);
+                  return `
+                    <div class="p-3.5 rounded-xl border border-emerald-200 bg-white space-y-1.5">
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-emerald-800">${c.id} · ${escapeHtml(c.category)} (R${c.round})</span>
+                        <span class="font-mono font-bold text-slate-900 tabular-nums">${formatEur(eff.cost)}</span>
+                      </div>
+                      <p class="text-sm font-bold text-slate-900 leading-snug">${escapeHtml(c.title)}</p>
+                      <div class="text-xs font-mono font-semibold text-emerald-700 tabular-nums">
+                        ${c.instantBudgetBonus && eff.energySave === 0
+                          ? `+${formatEur(c.instantBudgetBonus)} Zusatzbudget`
+                          : `-${formatNum(eff.energySave)} kWh/a · -${formatNum(eff.co2Save)} kg CO2/a`}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+        </div>
+      `;
     }
 
     // =========================================================================
